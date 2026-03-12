@@ -1,0 +1,71 @@
+# R
+.Rhistory
+.Rdata
+.RData
+.Ruserdata
+*.Rproj.user
+
+# renv
+renv/library/
+renv/staging/
+renv/python/
+renv/sandbox/
+renv/activate.R
+
+# targets cache (large, reproducible from code)
+_targets/
+
+# Data files (often large, should be stored elsewhere)
+data/*.csv
+data/*.xlsx
+data/*.rds
+data/*.parquet
+data/*.feather
+data/*.sav
+data/*.dta
+!data/.gitkeep
+
+# Output files (reproducible from code)
+output/*
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Quarto
+/.quarto/
+*_files/
+*_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Environment variables (NEVER commit secrets)
+.env
+.env.local
+*.env
+
+# Claude Code
+.claude/
+
+# Temporary files
+*.tmp
+*.temp
+*.log

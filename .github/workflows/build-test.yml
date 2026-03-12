@@ -1,0 +1,69 @@
+name: Build and Test Container
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/build-test.yml'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: research-container:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test R installation
+        run: |
+          docker run --rm research-container:test R --version
+
+      - name: Test Python installation
+        run: |
+          docker run --rm research-container:test python --version
+
+      - name: Test Quarto installation
+        run: |
+          docker run --rm research-container:test quarto --version
+
+      - name: Test R packages load correctly
+        run: |
+          docker run --rm research-container:test Rscript -e "
+            library(tidyverse)
+            library(targets)
+            library(here)
+            library(quarto)
+            cat('All core R packages loaded successfully!\n')
+          "
+
+      - name: Test Python packages load correctly
+        run: |
+          docker run --rm research-container:test python -c "
+          import numpy
+          import pandas
+          print('All core Python packages loaded successfully!')
+          "
+
+      - name: Test targets pipeline syntax
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/workspace research-container:test Rscript -e "
+            targets::tar_validate()
+            cat('Pipeline syntax is valid!\n')
+          "

@@ -1,0 +1,56 @@
+{
+  "name": "Research Container",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "REditorSupport.r",
+        "quarto.quarto",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "GitHub.copilot",
+        "eamodio.gitlens",
+        "davidanson.vscode-markdownlint"
+      ],
+      "settings": {
+        "r.rterm.linux": "/usr/local/bin/R",
+        "r.bracketedPaste": true,
+        "r.plot.useHttpgd": true,
+        "r.lsp.enabled": true,
+        "r.lsp.diagnostics": true,
+        "r.rpath.linux": "/usr/local/bin/R",
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "python.analysis.typeCheckingMode": "basic",
+        "editor.formatOnSave": true,
+        "files.trimTrailingWhitespace": true,
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  "forwardPorts": [8787, 8888, 4200],
+
+  "postCreateCommand": "echo 'Container ready! R packages are pre-installed. Run renv::init() to start tracking dependencies.'",
+
+  "remoteUser": "root",
+
+  "mounts": [
+    "source=renv-cache,target=/renv/cache,type=volume"
+  ],
+
+  "remoteEnv": {
+    "RENV_PATHS_CACHE": "/renv/cache",
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+  }
+}

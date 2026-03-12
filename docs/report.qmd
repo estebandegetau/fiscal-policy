@@ -1,0 +1,71 @@
+---
+title: "Research Report"
+author: "Your Name"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: true
+  pdf:
+    toc: true
+execute:
+  echo: true
+  warning: false
+---
+
+## Introduction
+
+This is a template Quarto document for your research project. It integrates with the `targets` pipeline for reproducible analysis.
+
+```{r}
+#| label: setup
+#| include: false
+
+library(tidyverse)
+library(targets)
+library(here)
+```
+
+## Load Pipeline Results
+
+Use `tar_read()` to load objects from your targets pipeline:
+
+```{r}
+#| label: load-results
+#| eval: false
+
+# Example: Load cleaned data from the pipeline
+# clean_data <- tar_read(clean_data)
+
+# Example: Load model results
+# model <- tar_read(model)
+```
+
+## Analysis
+
+Add your analysis code here. Reference outputs from the targets pipeline to ensure reproducibility.
+
+```{r}
+#| label: example-plot
+#| fig-cap: "Example visualization"
+
+# Example plot using mtcars (replace with your data)
+mtcars |>
+  ggplot(aes(x = wt, y = mpg, color = factor(cyl))) +
+  geom_point(size = 3) +
+  labs(
+    title = "Fuel Efficiency by Weight",
+    x = "Weight (1000 lbs)",
+    y = "Miles per Gallon",
+    color = "Cylinders"
+  ) +
+  theme_minimal()
+```
+
+## Results
+
+Summarize your findings here.
+
+## References
+
+Add your references here or use a `.bib` file with Quarto's citation system.
