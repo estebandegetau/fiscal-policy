@@ -6,11 +6,9 @@ This file is Claude's project-specific operating instructions. Read `COMPANION.m
 
 ## Project Overview
 
-<!-- POPULATE: Fill in the following fields after running /setup-project -->
-
-**Title**: <!-- POPULATE: Project title -->
-**Authors**: <!-- POPULATE: Author names -->
-**Affiliation**: <!-- POPULATE: Institution -->
+**Title**: The Effects of Fiscal Policy in South East Asia
+**Authors**: Esteban Degetau, Agustín Samano
+**Affiliation**: World Bank
 
 ### Project Structure
 
@@ -23,50 +21,57 @@ This file is Claude's project-specific operating instructions. Read `COMPANION.m
 
 ### Research Problem
 
-<!-- POPULATE: 2-3 sentences. What gap does this project address? Why has it been unsolved until now? -->
+Governments frequently change tax and spending rules with little evidence of their effects on GDP, investment, and employment. Producing such evidence requires identifying the causal effect of fiscal shocks on these outcomes. Existing research (Romer & Romer 2010) has established methods for the US, but extending these to other countries — particularly South East Asia — has been limited by data availability and the difficulty of identifying exogenous fiscal shocks outside the US context.
 
 ### Our Solution
 
-<!-- POPULATE: Describe the LLM-assisted approach. What methodological frameworks does it use? What does the pipeline produce? -->
+This project analyses the effects of exogenous fiscal shocks on macroeconomic and firm-level outcomes in South East Asia. It leverages a dataset of fiscal shock episodes produced by the authors in a complementary methodological paper (Degetau & Samano 2026), which uses LLMs to extend the Romer & Romer (2010) narrative identification approach to other countries. This project is the *applied* component: it takes the identified shocks as inputs and estimates their causal effects using local projections (Jordà 2005) and modern difference-in-differences methods.
 
 ### Key Innovation
 
-<!-- POPULATE: What is the core methodological contribution? What can this project do that was not possible before? -->
+Combining narratively identified fiscal shocks (produced via LLM-assisted methods in a companion paper) with firm-level micro data to estimate the causal effects of fiscal policy on investment and employment at the firm level in South East Asia.
 
 ### Research Contribution
 
-<!-- POPULATE: Bullet list of specific contributions. Distinguish methodological from empirical contributions. -->
+- **Empirical**: First estimates of causal fiscal multiplier effects on firm-level investment and employment in South East Asia
+- **Empirical**: Macro-level fiscal multiplier estimates for South East Asian countries using narratively identified shocks
+- **Methodological**: Application of modern DiD methods to fiscal shock identification in a cross-country setting
 
 ### Measurement Instruments
 
-<!-- POPULATE: List each instrument (e.g., C1, C2) with:
-- Short name and description
-- Output type (classification, extraction, estimation)
-- Sequencing dependencies (if C2 depends on C1 output, note that) -->
+<!-- Not yet specified — no LLM measurement instruments in this project. This is a purely analytical/econometric project. Instruments here refer to econometric estimation strategies (local projections, DiD) rather than LLM classification tasks. -->
 
 ### Validation Pipeline
 
-<!-- POPULATE: Describe the validation stages (e.g., S0-S3 if using H&K framework):
-- Stage name and description
-- What constitutes passing -->
+<!-- Not yet specified — validation in this project means meeting econometric identification assumptions rather than LLM output validation stages. -->
 
 ### Success Criteria
 
-<!-- POPULATE: Per-instrument success criteria. Format as:
-- Instrument name: Metric ≥ target (diagnostic benchmark vs. hard gate) -->
+- **Difference-in-differences**: Parallel pre-trends must hold (hard gate for causal interpretation)
+- **Local projections**: Standard significance and robustness checks
+<!-- Additional criteria TBA as instruments are specified -->
 
 ### Data and Scope
 
-<!-- POPULATE: Primary data sources, labeled example count, geographic/temporal scope, any known constraints -->
+- **Primary data sources**:
+  - Macro data: tax cut and hike episodes across South East Asian countries (translated from existing STATA analysis)
+  - Micro data: firm-level investment and employment data (`data/firm_data.zip`)
+  - Fiscal shocks: exogenous shock dataset from Degetau & Samano (2026) — used in Phase 3
+- **Geographic scope**: South East Asia (with potential extension to other countries)
+- **Temporal scope**: <!-- Not yet specified -->
+- **Note**: There is no LLM training or evaluation in this project. All outputs are analytical (regressions, tables, figures).
 
 ### Strategic Framing
 
-<!-- POPULATE: What this project IS and IS NOT. Prevents scope creep and misrepresentation. -->
+- **This project IS**: An applied econometrics project estimating causal effects of fiscal policy on macro and micro outcomes in South East Asia
+- **This project IS NOT**: An LLM measurement or validation project — the LLM-based shock identification is done in a separate companion paper
+- **This project IS NOT**: A replication of Romer & Romer (2010) — it uses their framework as extended by Degetau & Samano (2026) but estimates *effects*, not *shocks*
 
 ### Current Status
 
-<!-- Tier 1: Claude updates this section via /doc-sync -->
-<!-- POPULATE: Initial status entries per instrument and phase -->
+- **Phase 1** (Macro effects, all episodes): Not started — STATA code exists and needs translation to R
+- **Phase 2** (Micro effects, all episodes): Not started
+- **Phase 3** (Exogenous shocks, Degetau & Samano 2026): Not started
 
 ---
 
@@ -107,24 +112,20 @@ quarto render docs/report.qmd
 
 ### Languages and Packages
 
-- **R 4.5** with tidyverse, targets, tarchetypes, here, renv, quarto
-- **Python 3.12** with numpy, pandas, jupyter
+- **R 4.5** with tidyverse, targets, tarchetypes, here, renv, quarto, fixest (or equivalent for LP/DiD)
 - **Quarto** for scientific publishing
 - **targets** for reproducible pipelines
 - **Claude Code** for AI-assisted development
 
 ### Valid Model IDs
 
-<!-- POPULATE: List your validated model IDs here. Convention 3 requires checking against this list before writing any model parameter.
-
-Example:
-- Production: `claude-haiku-4-5-20251001`
-- Exploration: `claude-sonnet-4-6` (or cheaper alternatives)
--->
+Not applicable — this project does not make LLM API calls. Convention 3 is satisfied trivially.
 
 ### Data Sources
 
-<!-- POPULATE: Where does primary data come from? URLs, archives, APIs? -->
+- Macro fiscal episode data (translated from STATA)
+- Firm-level micro data: `data/firm_data.zip`
+- Exogenous fiscal shocks: Degetau & Samano (2026) dataset (Phase 3)
 
 ---
 
@@ -136,6 +137,7 @@ Example:
 - Use `here::here()` for all file paths
 - Define functions in `R/` directory
 - Core packages are pre-installed; use `renv::init()` then `renv::snapshot()` to track dependencies
+- When translating from STATA: preserve variable names and logic, add comments noting the original STATA command where non-obvious
 
 ### Pipeline (targets)
 
@@ -153,12 +155,9 @@ Example:
 
 ## Phase Structure
 
-<!-- POPULATE (optional): If your project has multiple phases, describe them:
-- Phase 0: ...
-- Phase 1: ...
-- Phase N: ...
-
-Delete this section if your project does not use phases. -->
+- **Phase 1**: Macro effects using all tax cut/hike episodes. Translate existing STATA analysis into R. Local projections of fiscal episodes onto macro outcomes (GDP, investment, employment).
+- **Phase 2**: Micro effects using all tax cut/hike episodes. Local projections and DiD estimation of fiscal episodes onto firm-level investment and employment using `data/firm_data.zip`.
+- **Phase 3**: Repeat Phases 1–2 using only exogenous fiscal shocks identified by Degetau & Samano (2026). This is the core causal contribution.
 
 ---
 
@@ -182,8 +181,7 @@ These 10 rules govern how Claude operates in this project. Verbatim from `COMPAN
 
 2. **Root cause first.** When something fails, identify the root cause before proposing a fix. Do not patch symptoms.
 
-3. **Model ID validation.** Before writing any model parameter, verify against the "Valid Model IDs" list above. Flag any legacy IDs.
-   <!-- POPULATE: List your validated model IDs in the Technology Stack section above -->
+3. **Model ID validation.** Not applicable — this project does not use LLM API calls.
 
 4. **Prefer existing files.** Search with Glob/Grep before creating new files.
 
@@ -203,12 +201,4 @@ These 10 rules govern how Claude operates in this project. Verbatim from `COMPAN
 
 ## Claude Code Agents
 
-<!-- POPULATE: List your project-specific agents following the taxonomy in COMPANION.md:
-
-Read-only agents (Read, Grep, Glob only):
-- <agent-name>: <role>, <model>
-
-Write-capable agents:
-- <agent-name>: <role>, <model>
-
-See COMPANION.md Part 2 for agent taxonomy principles. -->
+<!-- Agents should be configured following the COMPANION.md taxonomy when needed. No project-specific agents configured yet. -->
