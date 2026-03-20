@@ -17,7 +17,8 @@ tar_option_set(
     "haven",
     "labelled",
     "arrow",
-    "rvest"
+    "rvest",
+    "fixest"
     ),
   format = "rds",          # Default storage format
   memory = "transient",    # Free memory after target runs
@@ -63,5 +64,12 @@ list(
     orbis_merged, # Balanced panel
     merge_orbis_data(orbis_clean, macro_data),
     format = "feather"
-  )
+  ),
+
+  # Phase 1: Macro local projections (translated from stata/Charts_October_1_2025_.do)
+  tar_target(lp_data, prepare_lp_data(macro_data)),
+  tar_target(lp_models, run_all_lp_blocks(lp_data)),
+  tar_target(lp_cumulative, compute_all_cumulative_effects(lp_models)),
+  tar_target(lp_plots, plot_all_irfs(lp_cumulative)),
+  tar_target(lp_output, save_all_lp_outputs(lp_cumulative, lp_plots))
 )
