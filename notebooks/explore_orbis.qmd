@@ -1,0 +1,149 @@
+---
+title: "Explore Orbis Data"
+format: html
+---
+
+
+```{r}
+
+rm(list = ls())
+gc()
+
+pacman::p_load(
+    targets,
+    tidyverse,
+    labelled,
+    here,
+    tinytable
+)
+
+here::i_am("notebooks/explore_orbis.qmd")
+tar_config_set(store = here("_targets"))
+
+theme_set(theme_minimal())
+
+```
+
+
+## Inspect raw firm data
+
+```{r}
+orbis_raw <- tar_read(orbis_raw)
+```
+
+
+```{r}
+generate_dictionary(orbis_raw) |>
+    tt()
+
+```
+
+```{r}
+orbis_raw |>
+    summarise(
+        .by = c(CLOSDATE, RELDATE_SAS),
+        n = n()
+    )
+
+malaysia_raw <- orbis_raw |>
+    filter(CNTRYCDE == "MY")
+
+malaysia_raw |>
+    filter(OS_ID_NUMBER == first(OS_ID_NUMBER)) |>
+    arrange(CLOSDATE) |>
+    select(CLOSDATE) |>
+    tt()
+
+```
+
+```{r}
+rm(orbis_raw)
+gc()
+```
+
+## Inspect cleaned firm data
+
+
+```{r}
+orbis_clean <- tar_read(orbis_clean)
+
+malaysia <- orbis_clean |>
+    filter(alpha2 == "MY")
+```
+
+
+```{r}
+
+malaysia |>
+    summarise(
+        .by = c(close_date),
+        firms = n_distinct(firm_id)
+    ) |>
+    ggplot(aes(close_date, firms)) +
+    geom_col()
+
+malaysia |>
+    mutate(month = lubridate::month(close_date)) |>
+    summarise(
+        .by = c(month),
+        firms = n_distinct(firm_id)
+    ) |>
+    ggplot(aes(factor(month), firms)) +
+    geom_col()
+```
+
+Note that few firms report complete quarterly results in Malaysa. Fewer still report monthly results.
+
+```{r}
+malaysia |>
+    mutate(
+        year = year(close_date)
+    ) |>
+    summarise(
+        .by = c(firm_id, year),
+        n = n()
+    ) |>
+    ggplot(aes(n)) +
+    geom_histogram()
+```
+
+
+
+```{r}
+
+malaysia |>
+    summarise(
+        .by = c(firm_id),
+        years_covered = n_distinct(close_date)
+
+    ) |>
+    ggplot(aes(years_covered)) +
+    geom_histogram(binwidth = 1) +
+    scale_x_continuous(breaks = seq(1, 17, 2))
+```
+
+
+```{r}
+malaysia |>
+    summarise(
+        .by = year,
+        firms = n_distinct(firm_id)
+    ) |>
+    ggplot(aes(year, firms)) +
+    geom_col()
+```
+
+
+
+
+```{r}
+malaysia |>
+    summarise(
+        .by = firm_id,
+        years = n_distinct(close_date)
+    ) |>
+    ggplot(aes(years)) +
+    geom_histogram(binwidth = 1)
+```
+
+We can merge at year-country level with the macro data we have. For DiD, it has to be balanced.
