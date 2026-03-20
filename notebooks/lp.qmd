@@ -1,0 +1,235 @@
+---
+title: "Phase 1: Macro Local Projections"
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| label: setup
+#| cache: false
+
+rm(list = ls())
+gc()
+
+pacman::p_load(
+  targets,
+  tidyverse,
+  fixest,
+  tinytable,
+  here
+)
+
+here::i_am("notebooks/lp.qmd")
+tar_config_set(store = here("_targets"))
+
+# Source LP functions (for plot_irf helper)
+source(here("R/local_projections.R"))
+
+theme_set(theme_minimal(base_size = 13))
+
+# Load targets
+lp_cumulative <- tar_read(lp_cumulative)
+lp_plots      <- tar_read(lp_plots)
+lp_models     <- tar_read(lp_models)
+
+# Outcome display names (shared across CIT/PIT)
+outcome_labels <- c(
+  gdppc           = "GDP pc",
+  rev_tax         = "Tax revenue",
+  tax_inc_prof_cp = "Income tax rev.",
+  tax_inc_prof_id = "Income tax (indiv.)",
+  pvt_investment  = "Pvt investment",
+  fdi             = "FDI",
+  consumption     = "Consumption"
+)
+```
+
+```{r}
+#| label: helpers
+#| cache: false
+
+build_summary_table <- function(tx_id, outcome_labels, lp_cumulative, lp_models) {
+  block_ids <- paste0(tx_id, "_", names(outcome_labels))
+
+  # Extract h=5 cumulative effects (EAP)
+  cum <- bind_rows(lp_cumulative[block_ids], .id = "block") |>
+    filter(horizon == 5, group == "EAP") |>
+    mutate(across(c(coef, se), ~ .x * 100))
+
+  coef_row <- cum$coef |> sprintf(fmt = "%.3f")
+  se_row   <- cum$se   |> sprintf(fmt = "(%.3f)")
+
+  # Extract fit stats from H5 models
+  n_row   <- sapply(block_ids, \(b) fitstat(lp_models[[b]]$H5, ~n)[[1]])
+  wr2_row <- sapply(block_ids, \(b) r2(lp_models[[b]]$H5, "wr2")) |>
+    sprintf(fmt = "%.3f")
+
+  tbl_df <- data.frame(
+    ` ` = c("Coef (pp)", "", "N", "Within R\u00b2"),
+    rbind(coef_row, se_row, n_row, wr2_row),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  names(tbl_df) <- c(" ", unname(outcome_labels))
+
+  tt(tbl_df) |>
+    style_tt(i = 2, line = "b", line_color = "#d3d3d3")
+}
+```
+
+## Corporate Income Tax (CIT)
+
+::: {#fig-cit layout-ncol=2}
+
+```{r}
+#| label: fig-cit-gdppc
+#| fig-cap: "GDP per capita"
+lp_plots$cit_gdppc
+```
+
+```{r}
+#| label: fig-cit-rev-tax
+#| fig-cap: "Tax revenue"
+lp_plots$cit_rev_tax
+```
+
+```{r}
+#| label: fig-cit-tax-inc-prof-cp
+#| fig-cap: "Income tax revenue"
+lp_plots$cit_tax_inc_prof_cp
+```
+
+```{r}
+#| label: fig-cit-tax-inc-prof-id
+#| fig-cap: "Income tax (indiv.)"
+lp_plots$cit_tax_inc_prof_id
+```
+
+```{r}
+#| label: fig-cit-pvt-investment
+#| fig-cap: "Private investment"
+lp_plots$cit_pvt_investment
+```
+
+```{r}
+#| label: fig-cit-fdi
+#| fig-cap: "FDI"
+lp_plots$cit_fdi
+```
+
+```{r}
+#| label: fig-cit-consumption
+#| fig-cap: "Consumption"
+lp_plots$cit_consumption
+```
+
+Cumulative effect of a 1 pp CIT cut on selected outcomes (EAP)
+:::
+
+## Personal Income Tax (PIT)
+
+::: {#fig-pit layout-ncol=2}
+
+```{r}
+#| label: fig-pit-gdppc
+#| fig-cap: "GDP per capita"
+lp_plots$pit_gdppc
+```
+
+```{r}
+#| label: fig-pit-rev-tax
+#| fig-cap: "Tax revenue"
+lp_plots$pit_rev_tax
+```
+
+```{r}
+#| label: fig-pit-tax-inc-prof-cp
+#| fig-cap: "Income tax revenue"
+lp_plots$pit_tax_inc_prof_cp
+```
+
+```{r}
+#| label: fig-pit-tax-inc-prof-id
+#| fig-cap: "Income tax (indiv.)"
+lp_plots$pit_tax_inc_prof_id
+```
+
+```{r}
+#| label: fig-pit-pvt-investment
+#| fig-cap: "Private investment"
+lp_plots$pit_pvt_investment
+```
+
+```{r}
+#| label: fig-pit-fdi
+#| fig-cap: "FDI"
+lp_plots$pit_fdi
+```
+
+```{r}
+#| label: fig-pit-consumption
+#| fig-cap: "Consumption"
+lp_plots$pit_consumption
+```
+
+Cumulative effect of a 1 pp PIT cut on selected outcomes (EAP)
+:::
+
+## Summary
+
+::: {#tbl-lp-5}
+
+```{r}
+#| label: tbl-cit-summary
+#| tbl-cap: "Corporate Income Tax cuts"
+
+build_summary_table("cit", outcome_labels, lp_cumulative, lp_models)
+```
+
+```{r}
+#| label: tbl-pit-summary
+#| tbl-cap: "Personal Income Tax Cuts"
+
+build_summary_table("pit", outcome_labels, lp_cumulative, lp_models)
+```
+
+Cumulative effect of tax cuts after 5 years (EAP)
+:::
+
+
+@tbl-lp-5 shows very few statistically significant coefficients. Most importantly, "first stage" coefficients (tax revenue, income tax revenue, and individual income tax revenue) are highly insignificant.
+
+These results highlight the importance of using micro data to measure outcomes. 
+
+---
+
+# Appendix: MIC and HIC Results {.appendix}
+
+```{r}
+#| label: appendix-results
+#| results: asis
+
+tx_labels <- c(cit = "CIT", pit = "PIT")
+
+for (tx_id in names(lp_treatments())) {
+  for (out_id in names(lp_outcomes())) {
+    bid <- paste0(tx_id, "_", out_id)
+    cat("\n\n## ", tx_labels[[tx_id]], " \u2014 ", outcome_labels[[out_id]], "\n\n")
+    cat("::: {.panel-tabset}\n\n")
+
+    for (g in c("MIC", "HIC")) {
+      cat("### ", g, "\n\n")
+      p <- plot_irf(lp_cumulative[[bid]], bid, group = g)
+      print(p)
+      cat("\n\n")
+    }
+
+    cat(":::\n\n")
+  }
+}
+```

@@ -1,3 +1,4 @@
+
 # R/functions.R
 # Define your R functions here. They will be automatically sourced by targets.
 # Organize functions into multiple files as your project grows.
@@ -69,7 +70,7 @@ merge_orbis_data <- function(orbis_clean, macro_data) {
   empty_panel <- macro_data |>
     distinct(ccode) |>
     mutate(
-      year = list(seq(1980, 2020))
+      year = list(seq(2000, 2022))
     ) |>
     unnest(year)
 

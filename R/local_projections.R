@@ -6,109 +6,73 @@
 # uses standard TWFE via fixest::feols() as a working approximation.
 
 
+#' Outcome definitions (defined once, shared across all treatments)
+#' @return Named list of outcome specs
+lp_outcomes <- function() {
+  list(
+    gdppc          = list(raw_var = "NGDPRPPPPC",        is_log = FALSE, y_label = "GDP per Capita Growth"),
+    rev_tax        = list(raw_var = "i2_rev_tax",        is_log = FALSE, y_label = "Tax Revenue Growth"),
+    tax_inc_prof_cp = list(raw_var = "i2_tax_inc_prof_cp", is_log = FALSE, y_label = "Income Tax Revenue Growth"),
+    tax_inc_prof_id = list(raw_var = "i2_tax_inc_prof_id", is_log = FALSE, y_label = "Income Tax (Indiv.) Revenue Growth"),
+    pvt_investment = list(raw_var = "lpvt_investment",   is_log = TRUE,  y_label = "Private Investment Growth"),
+    fdi            = list(raw_var = "fdi_net_in",        is_log = FALSE, y_label = "FDI Growth"),
+    consumption    = list(raw_var = "tot_consump_wdi",   is_log = FALSE, y_label = "Consumption Growth")
+  )
+}
+
+#' Treatment definitions (defined once)
+#' @return Named list of treatment specs
+lp_treatments <- function() {
+  list(
+    cit = list(change_var = "change_corporate_tr",  level_var = "corporate_tr",  lag_level = TRUE),
+    pit = list(change_var = "change_individual_tr", level_var = "individual_tr", lag_level = FALSE)
+  )
+}
+
 #' Get specification for a local projection block
+#'
+#' Assembles a spec from the treatment × outcome cross product.
+#' Block IDs have the form "{treatment}_{outcome}", e.g. "cit_gdppc".
 #'
 #' @param block_id Character string identifying the block
 #' @return A list with fields: block_id, treatment_var, tax_level_var,
 #'   lag_tax_level, outcome_raw_var, outcome_is_log, exclude_crisis,
 #'   y_label, chart_filename
 get_lp_spec <- function(block_id) {
-  specs <- list(
-    cit_gdppc = list(
-      block_id = "cit_gdppc",
-      treatment_var = "change_corporate_tr",
-      tax_level_var = "corporate_tr",
-      lag_tax_level = TRUE,
-      outcome_raw_var = "NGDPRPPPPC",
-      outcome_is_log = FALSE,
-      exclude_crisis = FALSE,
-      y_label = "GDP per capita Growth",
-      chart_filename = "Cumulative_Effect_EAP_gdppc.png"
-    ),
-    cit_revenue = list(
-      block_id = "cit_revenue",
-      treatment_var = "change_corporate_tr",
-      tax_level_var = "corporate_tr",
-      lag_tax_level = TRUE,
-      outcome_raw_var = "i2_tax_inc_prof_cp",
-      outcome_is_log = FALSE,
-      exclude_crisis = FALSE,
-      y_label = "CIT Revenue Growth",
-      chart_filename = "Cumulative_Effect_EAP_cit_revenue.png"
-    ),
-    cit_pvt_investment = list(
-      block_id = "cit_pvt_investment",
-      treatment_var = "change_corporate_tr",
-      tax_level_var = "corporate_tr",
-      lag_tax_level = TRUE,
-      outcome_raw_var = "lpvt_investment",
-      outcome_is_log = TRUE,
-      exclude_crisis = TRUE,
-      y_label = "Private Investment Growth",
-      chart_filename = "Cumulative_Effect_EAP_private_investment_non_crisis.png"
-    ),
-    cit_fdi = list(
-      block_id = "cit_fdi",
-      treatment_var = "change_corporate_tr",
-      tax_level_var = "corporate_tr",
-      lag_tax_level = TRUE,
-      outcome_raw_var = "fdi_net_in",
-      outcome_is_log = FALSE,
-      exclude_crisis = TRUE,
-      y_label = "FDI Growth",
-      chart_filename = "Cumulative_Effect_EAP_fdi_non_crisis.png"
-    ),
-    cit_consumption = list(
-      block_id = "cit_consumption",
-      treatment_var = "change_corporate_tr",
-      tax_level_var = "corporate_tr",
-      lag_tax_level = TRUE,
-      outcome_raw_var = "tot_consump_wdi",
-      outcome_is_log = FALSE,
-      exclude_crisis = TRUE,
-      y_label = "Consumption Growth",
-      chart_filename = "Cumulative_Effect_EAP_consumption_non_crisis.png"
-    ),
-    pit_pvt_investment = list(
-      block_id = "pit_pvt_investment",
-      treatment_var = "change_individual_tr",
-      tax_level_var = "individual_tr",
-      lag_tax_level = FALSE,
-      outcome_raw_var = "lpvt_investment",
-      outcome_is_log = TRUE,
-      exclude_crisis = TRUE,
-      y_label = "Private Investment Growth",
-      chart_filename = "Cumulative_Effect_pit_EAP_private_investment_non_crisis.png"
-    ),
-    pit_fdi = list(
-      block_id = "pit_fdi",
-      treatment_var = "change_individual_tr",
-      tax_level_var = "individual_tr",
-      lag_tax_level = FALSE,
-      outcome_raw_var = "fdi_net_in",
-      outcome_is_log = FALSE,
-      exclude_crisis = TRUE,
-      y_label = "FDI Growth",
-      chart_filename = "Cumulative_Effect_pit_EAP_fdi_non_crisis.png"
-    ),
-    pit_consumption = list(
-      block_id = "pit_consumption",
-      treatment_var = "change_individual_tr",
-      tax_level_var = "individual_tr",
-      lag_tax_level = FALSE,
-      outcome_raw_var = "tot_consump_wdi",
-      outcome_is_log = FALSE,
-      exclude_crisis = TRUE,
-      y_label = "Consumption Growth",
-      chart_filename = "Cumulative_Effect_pit_EAP_consumption_non_crisis.png"
-    )
-  )
+  treatments <- lp_treatments()
+  outcomes   <- lp_outcomes()
 
-  if (!block_id %in% names(specs)) {
-    stop("Unknown block_id: ", block_id,
-         ". Valid IDs: ", paste(names(specs), collapse = ", "))
+  # Parse block_id: match treatment prefix (cit_ or pit_), remainder is outcome
+  tx_ids <- names(treatments)
+  matched <- FALSE
+  for (tx_id in tx_ids) {
+    prefix <- paste0(tx_id, "_")
+    if (startsWith(block_id, prefix)) {
+      out_id <- sub(prefix, "", block_id, fixed = TRUE)
+      matched <- TRUE
+      break
+    }
   }
-  specs[[block_id]]
+
+  if (!matched || !out_id %in% names(outcomes)) {
+    stop("Unknown block_id: ", block_id,
+         ". Valid IDs: ", paste(lp_block_ids(), collapse = ", "))
+  }
+
+  tx  <- treatments[[tx_id]]
+  out <- outcomes[[out_id]]
+
+  list(
+    block_id        = block_id,
+    treatment_var   = tx$change_var,
+    tax_level_var   = tx$level_var,
+    lag_tax_level   = tx$lag_level,
+    outcome_raw_var = out$raw_var,
+    outcome_is_log  = out$is_log,
+    exclude_crisis  = TRUE,
+    y_label         = out$y_label,
+    chart_filename  = paste0("Cumulative_Effect_", block_id, ".png")
+  )
 }
 
 
@@ -386,11 +350,11 @@ save_lp_outputs <- function(cumulative_effects, plot, block_id) {
 
 # --- Batch wrappers (iterate over blocks with purrr::map) -------------------
 
-#' Canonical list of LP block IDs
+#' Canonical list of LP block IDs (treatment × outcome cross product)
 lp_block_ids <- function() {
-  c("cit_gdppc", "cit_revenue",
-    "cit_pvt_investment", "cit_fdi", "cit_consumption",
-    "pit_pvt_investment", "pit_fdi", "pit_consumption")
+  tx_ids  <- names(lp_treatments())
+  out_ids <- names(lp_outcomes())
+  paste(rep(tx_ids, each = length(out_ids)), out_ids, sep = "_")
 }
 
 #' Run all LP blocks: data prep + regressions
