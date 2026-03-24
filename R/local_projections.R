@@ -25,7 +25,7 @@ lp_outcomes <- function() {
 lp_treatments <- function() {
   list(
     cit = list(change_var = "change_corporate_tr",  level_var = "corporate_tr",  lag_level = TRUE),
-    pit = list(change_var = "change_individual_tr", level_var = "individual_tr", lag_level = FALSE)
+    pit = list(change_var = "change_individual_tr", level_var = "individual_tr", lag_level = TRUE)
   )
 }
 

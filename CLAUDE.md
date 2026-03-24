@@ -13,6 +13,7 @@ This file is Claude's project-specific operating instructions. Read `COMPANION.m
 ### Project Structure
 
 - `R/` - R function definitions (sourced by targets)
+- `notebooks/` - Quarto analysis notebooks (exploratory and results)
 - `data/` - Raw data files (not tracked in git)
 - `output/` - Generated outputs (not tracked in git)
 - `docs/` - Quarto documents for reports
@@ -69,7 +70,7 @@ Combining narratively identified fiscal shocks (produced via LLM-assisted method
 
 ### Current Status
 
-- **Phase 1** (Macro effects, all episodes): Not started — STATA code exists and needs translation to R
+- **Phase 1** (Macro effects, all episodes): Complete — STATA translated to R, LP pipeline runs CIT × PIT treatments across 7 macro outcomes, results in `notebooks/lp.qmd`
 - **Phase 2** (Micro effects, all episodes): Not started
 - **Phase 3** (Exogenous shocks, Degetau & Samano 2026): Not started
 

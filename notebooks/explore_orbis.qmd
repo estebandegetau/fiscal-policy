@@ -1,6 +1,7 @@
 ---
 title: "Explore Orbis Data"
-format: html
+execute:
+    echo: true
 ---
 
 
@@ -31,6 +32,7 @@ theme_set(theme_minimal())
 orbis_raw <- tar_read(orbis_raw)
 ```
 
+What variables are available?
 
 ```{r}
 generate_dictionary(orbis_raw) |>
@@ -38,12 +40,27 @@ generate_dictionary(orbis_raw) |>
 
 ```
 
+---
+
+In Diff-in-Diff settings, having accurate date representation is key for identifying causal effects. What coded date should be interpreted as the date of observation, for econometrics purposes?
+
 ```{r}
 orbis_raw |>
     summarise(
         .by = c(CLOSDATE, RELDATE_SAS),
         n = n()
-    )
+    ) |>
+    ggplot(aes(x = CLOSDATE, y = RELDATE_SAS, size = n)) +
+    geom_point(alpha = 0.5, color = "coral")
+```
+
+
+Save for a few odd cases, for all observations `CLOSDATE` < `RELDATE_SAS`.
+
+What would these variables look within a single firm?
+
+```{r}
+
 
 malaysia_raw <- orbis_raw |>
     filter(CNTRYCDE == "MY")
@@ -51,18 +68,43 @@ malaysia_raw <- orbis_raw |>
 malaysia_raw |>
     filter(OS_ID_NUMBER == first(OS_ID_NUMBER)) |>
     arrange(CLOSDATE) |>
-    select(CLOSDATE) |>
+    select(CLOSDATE, RELDATE_SAS) |>
     tt()
 
 ```
 
+
+Within a firm, there is no variation of `RELDATE_SAS`; there's only yearly variation of `CLOSEDATE`. We'll construct the time variable from `CLOSEDATE`.
+
+
 ```{r}
+#| layout-ncol: 2
+orbis_raw |>
+    mutate(month_day = day(CLOSDATE)) |>
+    ggplot(aes(month_day)) +
+    geom_histogram()
+
+orbis_raw |>
+    mutate(month = month(CLOSDATE)) |>
+    ggplot(aes(month)) +
+    geom_histogram()
+```
+
+Most `CLOSEDATE` events regard the last day of the month; but not all of them.
+
+Most observations are end-of-year statements. There are very few monthly and (complete) quarterly observations. We should homogenize the dataset to yearly, taking the last available observation of the year.
+
+
+```{r}
+#| include: false
+#| cache: false
 rm(orbis_raw)
 gc()
 ```
 
 ## Inspect cleaned firm data
 
+The cleaned dataset takes the above observation into account, and also renames and keeps the relevant variables. It is a firm-year dataset.
 
 ```{r}
 orbis_clean <- tar_read(orbis_clean)
@@ -92,7 +134,7 @@ malaysia |>
     geom_col()
 ```
 
-Note that few firms report complete quarterly results in Malaysa. Fewer still report monthly results.
+Note that few firms report complete quarterly results in Malaysia. Fewer still report monthly results.
 
 ```{r}
 malaysia |>

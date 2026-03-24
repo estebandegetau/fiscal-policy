@@ -18,7 +18,8 @@ tar_option_set(
     "labelled",
     "arrow",
     "rvest",
-    "fixest"
+    "fixest",
+    "did"
     ),
   format = "rds",          # Default storage format
   memory = "transient",    # Free memory after target runs
@@ -55,11 +56,11 @@ list(
     clean_orbis_data(orbis_raw, country_codes),
     format = "feather"
   ),
-  tar_quarto(
-    explore_orbis,
-    here::here("notebooks/explore_orbis.qmd"),
-    cache = F
-  ),
+  # tar_quarto(
+  #   explore_orbis,
+  #   "notebooks/explore_orbis.qmd",
+  #   cache = F
+  # ),
   tar_target(
     orbis_merged, # Balanced panel
     merge_orbis_data(orbis_clean, macro_data),
@@ -71,5 +72,17 @@ list(
   tar_target(lp_models, run_all_lp_blocks(lp_data)),
   tar_target(lp_cumulative, compute_all_cumulative_effects(lp_models)),
   tar_target(lp_plots, plot_all_irfs(lp_cumulative)),
-  tar_target(lp_output, save_all_lp_outputs(lp_cumulative, lp_plots))
+  tar_target(lp_output, save_all_lp_outputs(lp_cumulative, lp_plots)),
+  # tar_quarto(
+  #   local_projections,
+  #   here::here("notebooks/local_projections.qmd"),
+  #   cache = F
+  # )
+
+  # Phase 2: Micro DiD (firm-level effects of tax changes)
+  tar_target(did_data_cit, prepare_did_data(orbis_merged, "cit")),
+  tar_target(did_data_pit, prepare_did_data(orbis_merged, "pit")),
+  tar_target(did_models, run_all_did_blocks(list(cit = did_data_cit, pit = did_data_pit))),
+  tar_target(did_results, aggregate_all_did_results(did_models)),
+  tar_target(did_plots, plot_all_did_event_studies(did_results))
 )

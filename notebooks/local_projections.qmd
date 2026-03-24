@@ -1,17 +1,11 @@
 ---
 title: "Phase 1: Macro Local Projections"
-format:
-  html:
-    toc: true
-    code-fold: true
-execute:
-  echo: false
-  warning: false
 ---
 
 ```{r}
 #| label: setup
 #| cache: false
+#| include: false
 
 rm(list = ls())
 gc()
@@ -24,7 +18,7 @@ pacman::p_load(
   here
 )
 
-here::i_am("notebooks/lp.qmd")
+here::i_am("notebooks/local_projections.qmd")
 tar_config_set(store = here("_targets"))
 
 # Source LP functions (for plot_irf helper)
@@ -204,15 +198,16 @@ Cumulative effect of tax cuts after 5 years (EAP)
 
 @tbl-lp-5 shows very few statistically significant coefficients. Most importantly, "first stage" coefficients (tax revenue, income tax revenue, and individual income tax revenue) are highly insignificant.
 
-These results highlight the importance of using micro data to measure outcomes. 
+These results highlight the importance of using micro data to measure outcomes.
 
 ---
 
-# Appendix: MIC and HIC Results {.appendix}
+
 
 ```{r}
 #| label: appendix-results
 #| results: asis
+#| include: false
 
 tx_labels <- c(cit = "CIT", pit = "PIT")
 

@@ -8,7 +8,6 @@ user-invocable: false
 
 Before using this skill, configure the following project-specific items:
 
-- **`R/gt_theme.R`**: If your project does not use a custom gt theme, remove or comment out the `source(here("R/gt_theme.R"))` and `set_theme(theme_minimal())` lines in the setup chunk. Replace `%>% gt_theme_report()` with `%>% opt_stylize()` or remove it.
 - **Writing tone audience**: Replace the `<!-- ADAPT: your audience -->` placeholder in the Writing Style section with your target reader (e.g., "development economist", "public health researcher", "policy analyst unfamiliar with machine learning").
 - **Config inheritance paths**: Adapt the inheritance chain to your directory structure. If you don't use `docs/`, `notebooks/`, and `reports/` directories, update accordingly.
 
@@ -66,13 +65,12 @@ Include the targets setup block **only when the document reads pipeline data**:
 
 library(targets)
 library(tidyverse)
-library(gt)
+library(tinytable)
+library(modelsummary)
 library(here)
 
 here::i_am("path/to/this-document.qmd")
 tar_config_set(store = here("_targets"))
-# source(here("R/gt_theme.R"))   # ADAPT: uncomment if using a custom gt theme
-# set_theme(theme_minimal())
 
 # Load data
 data <- tar_read(target_name)
@@ -82,35 +80,42 @@ Documents that don't use pipeline data (e.g., pure prose proposals) skip this en
 
 ## Tables
 
-**Always use `gt` for tables.** Never use `kableExtra` (incompatible with Typst) or markdown tables.
+**Use `tinytable::tt()` for data tables and `modelsummary` for regression tables.** Never use `gt`, `kableExtra`, or markdown tables.
 
-### Project theme
-
-If using a custom gt theme, all tables must end with `%>% gt_theme_report()`. Otherwise, use `%>% opt_stylize()` or another gt finishing function. This applies consistent formatting across all tables.
-
-Required pattern:
+### Data tables with `tt()`
 
 ```r
 #| label: tbl-descriptive-name
 #| tbl-cap: "Human-readable table caption"
 
-data %>%
-  gt() %>%
-  cols_label(col1 = "Readable Name") %>%
-  gt_theme_report()   # ADAPT: replace with your theme function if different
+data |>
+  tt() |>
+  style_tt(i = 1, line = "b", line_color = "#d3d3d3")
 ```
+
+### Regression tables with `modelsummary`
+
+```r
+#| label: tbl-regression-name
+#| tbl-cap: "Regression results caption"
+
+modelsummary(
+  models,
+  stars = TRUE,
+  gof_omit = "AIC|BIC|Log"
+)
+```
+
+`modelsummary` renders via `tinytable` by default — do not override the output backend.
 
 ### Rules
 
 - Always use Quarto chunk options `label: tbl-{ref}` and `tbl-cap:` for table titles and cross-referencing
 - Reference tables in text with `@tbl-{ref}` (e.g., `@tbl-descriptive-name`)
-- Do **not** use `tab_header()` for the main title; use `tbl-cap:` instead so Quarto handles numbering and cross-references
-- Always pipe the theme function as the **last** step in the gt chain
-- Let tables take their natural width; do not force `table.width = pct(100)`
-- Use `tab_footnote()` for methodological notes
-- Use `tab_style()` for conditional formatting when it aids interpretation
-- Use `fmt_percent()`, `fmt_number()`, etc. for consistent number formatting
-- Tables in Typst output will not break across pages (`reports/_metadata.yml` handles this)
+- Do **not** put the main title inside `tt()` or `modelsummary(title = ...)`; use `tbl-cap:` instead so Quarto handles numbering and cross-references
+- Let tables take their natural width
+- Use `style_tt()` for conditional formatting when it aids interpretation
+- Use `format_tt(fn = ...)` or `sprintf()` for consistent number formatting
 
 ## Plots
 

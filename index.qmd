@@ -1,0 +1,18 @@
+---
+title: "Fiscal Policy"
+date: last-modified
+date-format: long
+abstract: Abstract goes here.
+format:
+  html:
+    toc: true
+    comments:
+      hypothesis: true
+    title-block-banner: true
+  docx: default
+  jats: default
+  academic-typst: default
+section-numbering: "1.1.1"
+---
+
+Article text goes here.

@@ -19,6 +19,7 @@ _targets/
 # Data files (often large, should be stored elsewhere)
 data/
 !data/.gitkeep
+docs/**/*.pdf
 
 # Output files (reproducible from code)
 output/*
@@ -41,6 +42,9 @@ venv/
 *_files/
 *_cache/
 *.html
+_freeze/
+_extensions/
+_manuscript/
 
 # OS files
 .DS_Store
@@ -67,3 +71,4 @@ Thumbs.db
 *.temp
 *.log
 stata/
+**/*.quarto_ipynb

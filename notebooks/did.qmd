@@ -1,0 +1,219 @@
+---
+title: "Phase 2: Firm-Level Difference-in-Differences"
+---
+
+```{r}
+#| label: setup
+#| cache: false
+#| include: false
+
+rm(list = ls())
+gc()
+
+pacman::p_load(
+  targets,
+  tidyverse,
+  did,
+  tinytable,
+  here
+)
+
+here::i_am("notebooks/did.qmd")
+tar_config_set(store = here("_targets"))
+
+source(here("R/did.R"))
+
+theme_set(theme_minimal(base_size = 13))
+
+# Load targets
+did_data_cit <- tar_read(did_data_cit)
+did_data_pit <- tar_read(did_data_pit)
+did_models   <- tar_read(did_models)
+did_results  <- tar_read(did_results)
+did_plots    <- tar_read(did_plots)
+```
+
+```{r}
+#| label: helpers
+#| cache: false
+#| include: false
+
+# Extract pre-trend coefficients from event-study aggregation
+extract_pretrend <- function(aggte_obj) {
+  es <- data.frame(
+    e   = aggte_obj$egt,
+    att = aggte_obj$att.egt,
+    se  = aggte_obj$se.egt
+  ) |>
+    filter(e < 0, !is.na(se)) |>
+    mutate(
+      lower = att - 1.96 * se,
+      upper = att + 1.96 * se,
+      sig   = if_else(lower > 0 | upper < 0, "yes", "")
+    )
+  es
+}
+```
+
+## Design
+
+Absorbing binary treatment: once a country cuts taxes, it stays treated forever. The `did` package (Callaway & Sant'Anna 2021) handles staggered adoption and provides group-time ATTs with built-in pre-trend diagnostics.
+
+- **Panel window**: 2006--2017 (balanced; firms observed in all 12 years)
+- **Control group**: not-yet-treated
+- **Base period**: universal
+- **Covariates**: none (unconditional)
+- **Outcomes**: log-transformed (log investment, log employment)
+
+## Treatment summary
+
+```{r}
+#| label: tbl-treatment-summary
+
+bind_rows(
+  did_data_cit |>
+    distinct(ccode, first_treated_year) |>
+    mutate(treatment = "CIT"),
+  did_data_pit |>
+    distinct(ccode, first_treated_year) |>
+    mutate(treatment = "PIT")
+) |>
+  mutate(
+    status = if_else(first_treated_year == 0, "Never treated", as.character(first_treated_year))
+  ) |>
+  count(treatment, status) |>
+  pivot_wider(names_from = treatment, values_from = n, values_fill = 0) |>
+  arrange(status) |>
+  tt(caption = "Countries by first treatment year")
+```
+
+
+## Corporate Income Tax (CIT)
+
+::: {#fig-did-cit layout-ncol=2}
+
+```{r}
+#| label: fig-did-cit-investments
+#| fig-cap: "Investment"
+did_plots$cit_investments
+```
+
+```{r}
+#| label: fig-did-cit-employees
+#| fig-cap: "Employment"
+did_plots$cit_employees
+```
+
+Event-study: effect of CIT cuts on firm-level outcomes
+:::
+
+```{r}
+#| label: tbl-did-cit-att
+
+tibble(
+  Outcome = c("log(Investment)", "log(Employment)"),
+  ATT = c(
+    did_results$cit_investments$overall$overall.att,
+    did_results$cit_employees$overall$overall.att
+  ),
+  SE = c(
+    did_results$cit_investments$overall$overall.se,
+    did_results$cit_employees$overall$overall.se
+  )
+) |>
+  mutate(
+    `95% CI` = paste0(
+      "[", sprintf("%.3f", ATT - 1.96 * SE), ", ",
+      sprintf("%.3f", ATT + 1.96 * SE), "]"
+    ),
+    across(c(ATT, SE), \(x) sprintf("%.3f", x))
+  ) |>
+  tt(caption = "Overall ATT — CIT cuts")
+```
+
+### Pre-trend diagnostics (CIT)
+
+```{r}
+#| label: tbl-did-cit-pretrend
+
+bind_rows(
+  extract_pretrend(did_results$cit_investments$event_study) |>
+    mutate(outcome = "log(Investment)"),
+  extract_pretrend(did_results$cit_employees$event_study) |>
+    mutate(outcome = "log(Employment)")
+) |>
+  mutate(across(c(att, se, lower, upper), \(x) sprintf("%.4f", x))) |>
+  select(Outcome = outcome, `Event time` = e, ATT = att, SE = se,
+         Lower = lower, Upper = upper, Sig = sig) |>
+  tt(caption = "Pre-treatment event-study coefficients (should be ~0 for parallel trends)")
+```
+
+
+## Personal Income Tax (PIT)
+
+::: {#fig-did-pit layout-ncol=2}
+
+```{r}
+#| label: fig-did-pit-investments
+#| fig-cap: "Investment"
+did_plots$pit_investments
+```
+
+```{r}
+#| label: fig-did-pit-employees
+#| fig-cap: "Employment"
+did_plots$pit_employees
+```
+
+Event-study: effect of PIT cuts on firm-level outcomes
+:::
+
+```{r}
+#| label: tbl-did-pit-att
+
+tibble(
+  Outcome = c("log(Investment)", "log(Employment)"),
+  ATT = c(
+    did_results$pit_investments$overall$overall.att,
+    did_results$pit_employees$overall$overall.att
+  ),
+  SE = c(
+    did_results$pit_investments$overall$overall.se,
+    did_results$pit_employees$overall$overall.se
+  )
+) |>
+  mutate(
+    `95% CI` = paste0(
+      "[", sprintf("%.3f", ATT - 1.96 * SE), ", ",
+      sprintf("%.3f", ATT + 1.96 * SE), "]"
+    ),
+    across(c(ATT, SE), \(x) sprintf("%.3f", x))
+  ) |>
+  tt(caption = "Overall ATT — PIT cuts")
+```
+
+### Pre-trend diagnostics (PIT)
+
+```{r}
+#| label: tbl-did-pit-pretrend
+
+bind_rows(
+  extract_pretrend(did_results$pit_investments$event_study) |>
+    mutate(outcome = "log(Investment)"),
+  extract_pretrend(did_results$pit_employees$event_study) |>
+    mutate(outcome = "log(Employment)")
+) |>
+  mutate(across(c(att, se, lower, upper), \(x) sprintf("%.4f", x))) |>
+  select(Outcome = outcome, `Event time` = e, ATT = att, SE = se,
+         Lower = lower, Upper = upper, Sig = sig) |>
+  tt(caption = "Pre-treatment event-study coefficients (should be ~0 for parallel trends)")
+```
+
+
+## Interpretation
+
+<!-- Human: fill in interpretation after reviewing results.
+     Key questions:
+     - Do pre-trend coefficients support parallel trends?
+     - Are overall ATTs economically meaningful?
+     - How do CIT vs PIT effects compare? -->

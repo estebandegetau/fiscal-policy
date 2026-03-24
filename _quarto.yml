@@ -1,0 +1,55 @@
+project:
+  type: website
+  output-dir: _manuscript
+  render:
+    - docs/*.qmd
+    - notebooks/*.qmd
+    - reports/*.qmd
+    - "!docs/report.qmd"
+    - index.qmd
+
+author:
+  - name: "Esteban Degetau"
+    email: "estebandegetau@gmail.com"
+    affiliation: "World Bank"
+  - name: "Agustín Samano"
+    email: "asamanopenaloza@worldbank.org"
+    affiliation: "World Bank"
+
+keywords:
+  - Fiscal policy
+
+website:
+  sidebar:
+    style: "floating"
+    search: true
+    title: "Fiscal policy"
+    contents:
+      - index.qmd
+      - contents: docs/
+      - section: "Data Foundation"
+        contents:
+          - notebooks/explore_orbis.qmd
+      - section: "Results"
+        contents:
+          - notebooks/local_projections.qmd
+
+title-block-banner: true
+lightbox: true
+reference-location: margin
+theme:
+  light: flatly
+  dark: darkly
+
+license: "CC BY-NC"
+
+code-links: repo
+
+execute:
+  freeze: auto  # re-render only when source changes
+
+
+citeproc: true
+csl: https://www.zotero.org/styles/chicago-author-date-classic-no-url
+
+bibliography: references.bib

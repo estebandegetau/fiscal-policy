@@ -1,0 +1,24 @@
+format:
+  html:
+    lightbox: true
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show code"
+    self-contained: true
+    title-block-banner: true
+    execute:
+      warning: false
+      message: false
+      freeze: true
+      echo: true
+  typst:
+    execute:
+      warning: false
+      message: false
+      freeze: true
+      echo: false
+
+
+date: today
+date-format: long
