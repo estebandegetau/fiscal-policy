@@ -193,32 +193,18 @@ run_did_estimation <- function(did_data, outcome_var) {
 }
 
 
-#' Aggregate group-time ATTs into event-study and overall ATT
-#'
-#' @param att_gt_obj Object from run_did_estimation()
-#' @return List with elements: event_study (aggte object), overall (aggte object)
-aggregate_did_results <- function(att_gt_obj) {
-  list(
-    event_study = did::aggte(att_gt_obj, type = "dynamic"),
-    overall     = did::aggte(att_gt_obj, type = "simple")
-  )
-}
 
-
-#' Plot event-study coefficients from DiD aggregation
+#' Plot event-study coefficients from DiD summary data
 #'
-#' @param aggte_obj aggte object from aggregate_did_results()$event_study
+#' @param es_data Tibble with columns e, att, se (from did_summaries$event_study)
+#' @param crit_val Numeric: simultaneous critical value for CI bands (default 1.96)
 #' @param title Character: plot title
 #' @return ggplot object
-plot_did_event_study <- function(aggte_obj, title = "") {
-  es <- data.frame(
-    e     = aggte_obj$egt,
-    att   = aggte_obj$att.egt,
-    se    = aggte_obj$se.egt
-  ) |>
+plot_did_event_study <- function(es_data, crit_val = 1.96, title = "") {
+  es <- es_data |>
     mutate(
-      lower = att - 1.96 * se,
-      upper = att + 1.96 * se
+      lower = att - crit_val * se,
+      upper = att + crit_val * se
     )
 
   ggplot(es, aes(x = e, y = att)) +
@@ -309,14 +295,6 @@ filter_did_scope <- function(data, scope, scope_type) {
 
 # --- Batch wrappers -----------------------------------------------------------
 
-#' Canonical list of DiD block IDs (treatment × outcome)
-#' @note Superseded by did_spec() for scope-aware estimation.
-did_block_ids <- function() {
-  tx_ids  <- names(did_treatments())
-  out_ids <- names(did_outcomes())
-  paste(rep(tx_ids, each = length(out_ids)), out_ids, sep = "_")
-}
-
 
 #' Run all DiD estimations across scope × treatment × outcome combinations
 #'
@@ -345,36 +323,50 @@ run_all_did_blocks <- function(did_data_list) {
 }
 
 
-#' Aggregate all DiD results (event-study + overall ATT)
+#' Extract lightweight summaries from all DiD models
 #'
-#' NULL entries (failed estimations) are dropped before aggregation.
+#' Aggregates each att_gt object into event-study, group-level, and overall ATT,
+#' then extracts only the small numeric fields the notebook needs. This avoids
+#' serialising the full DIDparams (which embeds the estimation data) into the
+#' target store.
 #'
-#' @param did_models Named list of att_gt objects from run_all_did_blocks()
-#' @return Named list of lists (each with event_study and overall)
-aggregate_all_did_results <- function(did_models) {
+#' @param did_models Named list of att_gt objects (or NULL) from run_all_did_blocks()
+#' @return Tibble with columns: block_id, scope, tx, outcome, n,
+#'   overall_att, overall_se, event_study (list-col), event_study_crit_val,
+#'   group_att (list-col)
+extract_did_summaries <- function(did_models) {
   did_models |>
     purrr::discard(is.null) |>
-    purrr::map(\(att_gt_obj) aggregate_did_results(att_gt_obj))
-}
+    purrr::imap_dfr(\(mod, bid) {
+      tryCatch({
+        parsed  <- parse_block_id(bid)
+        es_agg  <- did::aggte(mod, type = "dynamic")
+        grp_agg <- did::aggte(mod, type = "group")
+        ov_agg  <- did::aggte(mod, type = "simple")
 
-
-#' Plot all event-study figures
-#'
-#' @param did_results Named list from aggregate_all_did_results()
-#' @return Named list of ggplot objects
-plot_all_did_event_studies <- function(did_results) {
-  outcomes  <- did_outcomes()
-  tx_labels <- c(cit = "CIT", pit = "PIT")
-
-  did_results |>
-    purrr::imap(\(res, bid) {
-      parsed <- parse_block_id(bid)
-      scope_label <- if (parsed$scope == "world") "" else paste0(parsed$scope, ": ")
-      title <- paste0(
-        scope_label,
-        tx_labels[[parsed$tx]], " Cut \u2192 ",
-        outcomes[[parsed$outcome]]$label
-      )
-      plot_did_event_study(res$event_study, title = title)
+        tibble::tibble(
+          block_id  = bid,
+          scope     = parsed$scope,
+          tx        = parsed$tx,
+          outcome   = parsed$outcome,
+          n         = nrow(mod$DIDparams$data),
+          overall_att = ov_agg$overall.att,
+          overall_se  = ov_agg$overall.se,
+          event_study = list(tibble::tibble(
+            e   = es_agg$egt,
+            att = es_agg$att.egt,
+            se  = es_agg$se.egt
+          )),
+          event_study_crit_val = es_agg$crit.val.egt,
+          group_att = list(tibble::tibble(
+            group = grp_agg$egt,
+            att   = grp_agg$att.egt,
+            se    = grp_agg$se.egt
+          ))
+        )
+      }, error = function(e) {
+        warning(sprintf("Aggregation failed for %s: %s", bid, e$message))
+        NULL
+      })
     })
 }

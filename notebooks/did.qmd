@@ -1,7 +1,7 @@
 ---
 title: "Phase 2: Firm-Level Difference-in-Differences"
 execute:
-  cache: true
+  cache: refresh
 ---
 
 ```{r}
@@ -32,11 +32,9 @@ theme_set(theme_minimal(base_size = 13))
 
 ```{r}
 # Load targets
-did_data_cit <- tar_read(did_data_cit)
-did_data_pit <- tar_read(did_data_pit)
-did_models   <- tar_read(did_models)
-did_results  <- tar_read(did_results)
-did_plots    <- tar_read(did_plots)
+did_data_cit  <- tar_read(did_data_cit)
+did_data_pit  <- tar_read(did_data_pit)
+did_summaries <- tar_read(did_summaries)
 ```
 
 ```{r}
@@ -44,20 +42,28 @@ did_plots    <- tar_read(did_plots)
 #| cache: false
 #| include: false
 
-# Extract pre-trend coefficients from event-study aggregation
-extract_pretrend <- function(aggte_obj) {
-  es <- data.frame(
-    e   = aggte_obj$egt,
-    att = aggte_obj$att.egt,
-    se  = aggte_obj$se.egt
-  ) |>
+# Extract pre-trend coefficients from event-study summary data
+extract_pretrend <- function(es_data) {
+  es_data |>
     filter(e < 0, !is.na(se)) |>
     mutate(
       lower = att - 1.96 * se,
       upper = att + 1.96 * se,
       sig   = if_else(lower > 0 | upper < 0, "yes", "")
     )
-  es
+}
+
+# Build a titled event-study plot from did_summaries for a given block_id
+did_es_plot <- function(bid, did_summaries) {
+  row <- did_summaries |> filter(block_id == bid)
+  if (nrow(row) == 0) return(NULL)
+
+  tx_labels <- c(cit = "CIT", pit = "PIT")
+  outcomes  <- did_outcomes()
+  scope_label <- if (row$scope == "world") "" else paste0(row$scope, ": ")
+  title <- paste0(scope_label, tx_labels[[row$tx]],
+                  " Cut \u2192 ", outcomes[[row$outcome]]$label)
+  plot_did_event_study(row$event_study[[1]], row$event_study_crit_val, title)
 }
 
 # Regional spaghetti: one line per region with ±1 SE ribbon
@@ -223,25 +229,21 @@ plot_country_event_spaghetti <- function(data, outcome_var, label) {
     scale_y_log10(labels = scales::label_comma())
 }
 
-# Summary table builder for any scope
-build_did_summary_table <- function(scope_prefix, did_results, did_models) {
+# Summary table builder for any scope (consumes did_summaries tibble)
+build_did_summary_table <- function(scope_prefix, did_summaries) {
   treatments <- did_treatments()
   outcomes   <- did_outcomes()
   tx_labels  <- c(cit = "CIT", pit = "PIT")
 
+  scope_data <- did_summaries |> filter(scope == scope_prefix)
+
   summary_rows <- purrr::map_dfr(names(treatments), \(tx) {
     cells <- purrr::map(names(outcomes), \(out) {
-      bid <- paste(scope_prefix, tx, out, sep = "_")
-      res <- did_results[[bid]]
-      mod <- did_models[[bid]]
-      if (is.null(res) || is.null(mod)) {
+      row <- scope_data |> filter(.data$tx == .env$tx, outcome == out)
+      if (nrow(row) == 0) {
         return(list(att = NA_real_, se = NA_real_, n = NA_integer_))
       }
-      list(
-        att = res$overall$overall.att,
-        se  = res$overall$overall.se,
-        n   = nrow(mod$DIDparams$data)
-      )
+      list(att = row$overall_att, se = row$overall_se, n = row$n)
     }) |> setNames(names(outcomes))
 
     tibble(
@@ -516,7 +518,8 @@ Firm-level mean outcomes by country on event time (± 1 SE, log scale). South Ea
 
 for (out_id in names(did_outcomes())) {
   bid <- paste("world", "cit", out_id, sep = "_")
-  if (!is.null(did_plots[[bid]])) print(did_plots[[bid]])
+  p <- did_es_plot(bid, did_summaries)
+  if (!is.null(p)) print(p)
 }
 ```
 
@@ -533,7 +536,8 @@ Event-study: CIT cut effects on firm-level outcomes
 
 for (out_id in names(did_outcomes())) {
   bid <- paste("world", "pit", out_id, sep = "_")
-  if (!is.null(did_plots[[bid]])) print(did_plots[[bid]])
+  p <- did_es_plot(bid, did_summaries)
+  if (!is.null(p)) print(p)
 }
 ```
 
@@ -545,7 +549,7 @@ Event-study: PIT cut effects on firm-level outcomes
 #| label: tbl-did-summary
 #| tbl-cap: "Overall ATT estimates"
 
-build_did_summary_table("world", did_results, did_models)
+build_did_summary_table("world", did_summaries)
 ```
 
 
@@ -568,8 +572,9 @@ for (reg in region_scopes) {
   for (tx in c("cit", "pit")) {
     for (out_id in names(did_outcomes())) {
       bid <- paste(reg, tx, out_id, sep = "_")
-      if (!is.null(did_plots[[bid]])) {
-        print(did_plots[[bid]])
+      p <- did_es_plot(bid, did_summaries)
+      if (!is.null(p)) {
+        print(p)
         cat("\n\n")
       }
     }
@@ -587,7 +592,7 @@ for (reg in region_scopes) {
 
 for (reg in c("EAP", "MIC", "HIC")) {
   cat(sprintf("\n**%s**\n\n", reg))
-  print(build_did_summary_table(reg, did_results, did_models))
+  print(build_did_summary_table(reg, did_summaries))
   cat("\n\n")
 }
 ```
@@ -599,10 +604,9 @@ for (reg in c("EAP", "MIC", "HIC")) {
 #| label: country-scopes
 #| include: false
 
-# Discover EAP country scopes from the results
+# Discover EAP country scopes from the summaries
 known_scopes <- c("world", "EAP", "MIC", "HIC")
-all_scopes <- unique(purrr::map_chr(strsplit(names(did_results), "_"), 1))
-country_scopes <- setdiff(all_scopes, known_scopes)
+country_scopes <- setdiff(unique(did_summaries$scope), known_scopes)
 
 # Map ccodes to country names for labels
 country_labels <- did_data_cit |>
@@ -619,9 +623,8 @@ country_labels <- did_data_cit |>
 
 for (cc in country_scopes) {
   # Skip countries where all estimations failed
-  bids <- paste(cc, rep(c("cit", "pit"), each = length(did_outcomes())),
-                rep(names(did_outcomes()), 2), sep = "_")
-  if (all(sapply(bids, \(b) is.null(did_results[[b]])))) next
+  cc_data <- did_summaries |> filter(scope == cc)
+  if (nrow(cc_data) == 0) next
 
   label <- country_labels[cc] %||% cc
   cat(sprintf("\n#### %s (%s)\n\n", label, cc))
@@ -630,8 +633,9 @@ for (cc in country_scopes) {
   for (tx in c("cit", "pit")) {
     for (out_id in names(did_outcomes())) {
       bid <- paste(cc, tx, out_id, sep = "_")
-      if (!is.null(did_plots[[bid]])) {
-        print(did_plots[[bid]])
+      p <- did_es_plot(bid, did_summaries)
+      if (!is.null(p)) {
+        print(p)
         cat("\n\n")
       }
     }
@@ -648,13 +652,12 @@ for (cc in country_scopes) {
 #| results: asis
 
 for (cc in country_scopes) {
-  bids <- paste(cc, rep(c("cit", "pit"), each = length(did_outcomes())),
-                rep(names(did_outcomes()), 2), sep = "_")
-  if (all(sapply(bids, \(b) is.null(did_results[[b]])))) next
+  cc_data <- did_summaries |> filter(scope == cc)
+  if (nrow(cc_data) == 0) next
 
   label <- country_labels[cc] %||% cc
   cat(sprintf("\n**%s (%s)**\n\n", label, cc))
-  print(build_did_summary_table(cc, did_results, did_models))
+  print(build_did_summary_table(cc, did_summaries))
   cat("\n\n")
 }
 ```

@@ -83,6 +83,5 @@ list(
   tar_target(did_data_cit, prepare_did_data(orbis_merged, "cit")),
   tar_target(did_data_pit, prepare_did_data(orbis_merged, "pit")),
   tar_target(did_models, run_all_did_blocks(list(cit = did_data_cit, pit = did_data_pit))),
-  tar_target(did_results, aggregate_all_did_results(did_models)),
-  tar_target(did_plots, plot_all_did_event_studies(did_results))
+  tar_target(did_summaries, extract_did_summaries(did_models))
 )
