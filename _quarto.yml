@@ -33,6 +33,7 @@ website:
       - section: "Results"
         contents:
           - notebooks/local_projections.qmd
+          - notebooks/did.qmd
 
 title-block-banner: true
 lightbox: true

@@ -7,6 +7,25 @@
 # group-time ATTs, event-study aggregation, and built-in pre-trend tests.
 
 
+#' Classify countries into regional groups for DiD analysis
+#'
+#' Mirrors the LP pipeline's grouping logic (R/local_projections.R:93-101),
+#' simplified to three groups: EAP, MIC, HIC.
+#' Countries not matching any group (China, Mongolia, PIC) get NA.
+#'
+#' @param group2 Character vector of World Bank group2 classification
+#' @param incomelevel Character vector of income level codes
+#' @return Character vector: "EAP", "MIC", "HIC", or NA
+classify_region <- function(group2, incomelevel) {
+  case_when(
+    group2 == "EAP" ~ "EAP",
+    incomelevel %in% c("LMC", "UMC") ~ "MIC",
+    incomelevel == "HIC" ~ "HIC",
+    TRUE ~ NA_character_
+  )
+}
+
+
 #' Treatment definitions for DiD
 #' @return Named list of treatment specs
 did_treatments <- function() {
@@ -17,11 +36,18 @@ did_treatments <- function() {
 }
 
 #' Outcome definitions for DiD (firm-level)
-#' @return Named list of outcome specs (var = base name, log version used in estimation)
+#' @return Named list of outcome specs (var, label, transform)
 did_outcomes <- function() {
   list(
-    investments = list(var = "investments", label = "log(Investment)"),
-    employees   = list(var = "employees",   label = "log(Employment)")
+    investments          = list(var = "investments",          label = "log(Investment)",         transform = "log"),
+    employees            = list(var = "employees",            label = "log(Employment)",         transform = "log"),
+    revenues             = list(var = "revenues",             label = "log(Revenue)",            transform = "log"),
+    total_assets         = list(var = "total_assets",         label = "log(Total Assets)",       transform = "log"),
+    net_profit           = list(var = "net_profit",           label = "asinh(Net Profit)",       transform = "asinh"),
+    profit_per_employee  = list(var = "profit_per_employee",  label = "asinh(Profit/Employee)",  transform = "asinh"),
+    social_expenditure   = list(var = "social_expenditure",   label = "log(Social Exp.)",        transform = "log"),
+    income_tax           = list(var = "income_tax",           label = "log(Income Tax Payable)", transform = "log"),
+    income_taxes         = list(var = "income_taxes",         label = "log(Income Taxes)",       transform = "log")
   )
 }
 
@@ -43,11 +69,13 @@ did_outcomes <- function() {
 #' @return Tibble ready for did::att_gt()
 prepare_did_data <- function(orbis_merged, treatment_key) {
   tx <- did_treatments()[[treatment_key]]
-  outcome_vars <- purrr::map_chr(did_outcomes(), "var")
+  outcomes <- did_outcomes()
+  outcome_vars <- purrr::map_chr(outcomes, "var")
 
   # Select only needed columns early to reduce memory (~1.4 GB -> ~40 MB)
-  keep_cols <- c("ccode", "year", "firm_id", tx$change_var,
+  keep_cols <- c("ccode", "country", "year", "firm_id", tx$change_var,
                  "banking_crisis", "currency_crisis", "debt_crisis",
+                 "group2", "incomelevel",
                  outcome_vars)
   df_slim <- orbis_merged |>
     select(all_of(keep_cols))
@@ -91,14 +119,26 @@ prepare_did_data <- function(orbis_merged, treatment_key) {
     mutate(
       treated = as.integer(
         first_treated_year > 0 & year >= first_treated_year
-      ),
-      # Log-transform firm outcomes (positive values only)
-      log_investments = if_else(investments > 0, log(investments), NA_real_),
-      log_employees   = if_else(employees > 0,   log(employees),   NA_real_)
+      )
     ) |>
-    select(ccode, year, firm_id,
-           first_treated_year, treated,
-           investments, employees, log_investments, log_employees)
+    # Transform outcomes: log (positive only) or asinh (handles negatives/zeros)
+    mutate(
+      across(
+        all_of(purrr::map_chr(purrr::keep(outcomes, \(o) o$transform == "log"), "var")),
+        \(x) if_else(x > 0, log(x), NA_real_),
+        .names = "t_{.col}"
+      ),
+      across(
+        all_of(purrr::map_chr(purrr::keep(outcomes, \(o) o$transform == "asinh"), "var")),
+        \(x) asinh(x),
+        .names = "t_{.col}"
+      )
+    ) |>
+    mutate(region = classify_region(group2, incomelevel)) |>
+    select(ccode, country, year, firm_id,
+           first_treated_year, treated, region,
+           all_of(outcome_vars),
+           starts_with("t_"))
 
   # Balance panel: keep only firms observed in all years of the window
   # (did::att_gt with panel=TRUE requires balanced data)
@@ -117,20 +157,20 @@ prepare_did_data <- function(orbis_merged, treatment_key) {
 
 #' Run did::att_gt() for one treatment x outcome combination
 #'
-#' Uses log-transformed outcomes (log_investments, log_employees) for
-#' better-behaved estimation. Filters to firms with non-missing outcome
+#' Uses transformed outcomes (t_investments, t_employees, etc.) for
+#' estimation. Filters to firms with non-missing transformed outcome
 #' across all panel years before estimating.
 #'
 #' @param did_data Tibble from prepare_did_data()
-#' @param outcome_var Character: base outcome name ("investments" or "employees")
+#' @param outcome_var Character: base outcome name (e.g. "investments")
 #' @return att_gt object from the did package
 run_did_estimation <- function(did_data, outcome_var) {
-  log_var <- paste0("log_", outcome_var)
+  t_var <- paste0("t_", outcome_var)
 
-  # Keep only firms with non-missing log outcome in every year
+  # Keep only firms with non-missing transformed outcome in every year
   n_years <- n_distinct(did_data$year)
   complete_firms <- did_data |>
-    filter(!is.na(.data[[log_var]])) |>
+    filter(!is.na(.data[[t_var]])) |>
     count(firm_id) |>
     filter(n == n_years) |>
     pull(firm_id)
@@ -140,7 +180,7 @@ run_did_estimation <- function(did_data, outcome_var) {
     mutate(firm_id_num = as.integer(factor(firm_id)))
 
   did::att_gt(
-    yname  = log_var,
+    yname  = t_var,
     tname  = "year",
     idname = "firm_id_num",
     gname  = "first_treated_year",

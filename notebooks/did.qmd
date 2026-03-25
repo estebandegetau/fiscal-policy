@@ -1,5 +1,7 @@
 ---
 title: "Phase 2: Firm-Level Difference-in-Differences"
+execute:
+  cache: true
 ---
 
 ```{r}
@@ -25,6 +27,10 @@ source(here("R/did.R"))
 
 theme_set(theme_minimal(base_size = 13))
 
+```
+
+
+```{r}
 # Load targets
 did_data_cit <- tar_read(did_data_cit)
 did_data_pit <- tar_read(did_data_pit)
@@ -53,11 +59,176 @@ extract_pretrend <- function(aggte_obj) {
     )
   es
 }
+
+# Regional spaghetti: one line per region with ±1 SE ribbon
+plot_regional_spaghetti <- function(data, outcome_var, label) {
+  agg <- data |>
+    filter(!is.na(region), !is.na(.data[[outcome_var]])) |>
+    group_by(region, year) |>
+    summarise(
+      mean = mean(.data[[outcome_var]], na.rm = TRUE),
+      se   = sd(.data[[outcome_var]], na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    ) |>
+    mutate(region = factor(region, levels = c("EAP", "MIC", "HIC")))
+
+  ggplot(agg, aes(x = year, y = mean, color = region, fill = region)) +
+    geom_ribbon(aes(ymin = mean - se, ymax = mean + se), alpha = 0.15, linewidth = 0) +
+    geom_line(linewidth = 0.8) +
+    scale_color_brewer(palette = "Set2", name = "Region") +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(x = "Year", y = label) +
+    theme(legend.position = "bottom") +
+    scale_x_continuous(breaks = seq(2006, 2018, 2))
+}
+
+# Regional spaghetti with log10 scale: plots raw Y, log-scaled axis
+plot_regional_spaghetti_log10 <- function(data, outcome_var, label) {
+  agg <- data |>
+    filter(!is.na(region), !is.na(.data[[outcome_var]]),
+           .data[[outcome_var]] > 0) |>
+    group_by(region, year) |>
+    summarise(
+      mean = mean(.data[[outcome_var]], na.rm = TRUE),
+      se   = sd(.data[[outcome_var]], na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    ) |>
+    mutate(region = factor(region, levels = c("EAP", "MIC", "HIC")))
+
+  ggplot(agg, aes(x = year, y = mean, color = region, fill = region)) +
+    geom_ribbon(aes(ymin = mean - se, ymax = mean + se), alpha = 0.15, linewidth = 0) +
+    geom_line(linewidth = 0.8) +
+    scale_y_log10(labels = scales::label_comma()) +
+    scale_color_brewer(palette = "Set2", name = "Region") +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(x = "Year", y = label) +
+    theme(legend.position = "bottom") +
+    scale_x_continuous(breaks = seq(2006, 2018, 2))
+}
+
+# Regional spaghetti indexed to 2006 = 100
+plot_regional_spaghetti_indexed <- function(data, outcome_var, label) {
+  agg <- data |>
+    filter(!is.na(region), !is.na(.data[[outcome_var]]),
+           .data[[outcome_var]] > 0) |>
+    group_by(region, year) |>
+    summarise(
+      mean = mean(.data[[outcome_var]], na.rm = TRUE),
+      se   = sd(.data[[outcome_var]], na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    ) |>
+    group_by(region) |>
+    mutate(
+      base = mean[year == 2006],
+      index = mean / base * 100,
+      index_se = se / base * 100
+    ) |>
+    ungroup() |>
+    mutate(region = factor(region, levels = c("EAP", "MIC", "HIC")))
+
+  ggplot(agg, aes(x = year, y = index, color = region, fill = region)) +
+    geom_ribbon(aes(ymin = index - index_se, ymax = index + index_se),
+                alpha = 0.15, linewidth = 0) +
+    geom_line(linewidth = 0.8) +
+    geom_hline(yintercept = 100, linetype = "dashed", alpha = 0.4) +
+    scale_color_brewer(palette = "Set2", name = "Region") +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(x = "Year", y = paste0(label, " (2006 = 100)")) +
+    theme(legend.position = "bottom") +
+    scale_x_continuous(breaks = seq(2006, 2018, 2))
+}
+
+# Country spaghetti (EAP only): one line per country with treatment vlines
+plot_country_spaghetti <- function(data, outcome_var, label) {
+  country_means <- data |>
+    filter(region == "EAP", !is.na(.data[[outcome_var]])) |>
+    group_by(ccode, country, year) |>
+    summarise(
+      mean = mean(.data[[outcome_var]], na.rm = TRUE),
+      se   = sd(.data[[outcome_var]], na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    )
+
+  # Gather treatment years from both CIT and PIT
+  treat_years <- bind_rows(
+    did_data_cit |>
+      distinct(ccode, country, first_treated_year) |>
+      mutate(tax = "CIT"),
+    did_data_pit |>
+      distinct(ccode, country, first_treated_year) |>
+      mutate(tax = "PIT")
+  ) |>
+    filter(first_treated_year > 0) |>
+    semi_join(country_means, by = "ccode")
+
+  ggplot(country_means, aes(x = year, y = mean, color = country, fill = country)) +
+    geom_ribbon(aes(ymin = mean - se, ymax = mean + se), alpha = 0.15, linewidth = 0) +
+    geom_line(linewidth = 0.6) +
+    geom_vline(
+      data = treat_years,
+      aes(xintercept = first_treated_year, linetype = tax),
+      alpha = 0.4
+    ) +
+    scale_linetype_manual(values = c(CIT = "solid", PIT = "dashed"), name = "Tax cut") +
+    labs(x = "", y = label, color = "Country") +
+    theme(legend.position = "bottom") +
+    facet_wrap(~country, ncol = 2) +
+    guides(color = "none", fill = "none") +
+    scale_y_log10(labels = scales::label_comma())
+}
+
+# Regional event-time spaghetti: one line per region, treated units only
+plot_regional_event_spaghetti <- function(data, outcome_var, label) {
+  agg <- data |>
+    filter(first_treated_year > 0, !is.na(region), !is.na(.data[[outcome_var]])) |>
+    mutate(event_time = year - first_treated_year) |>
+    group_by(region, event_time) |>
+    summarise(
+      mean = mean(.data[[outcome_var]], na.rm = TRUE),
+      se   = sd(.data[[outcome_var]], na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    ) |>
+    mutate(region = factor(region, levels = c("EAP", "MIC", "HIC")))
+
+  ggplot(agg, aes(x = event_time, y = mean, color = region, fill = region)) +
+    geom_ribbon(aes(ymin = mean - se, ymax = mean + se), alpha = 0.15, linewidth = 0) +
+    geom_line(linewidth = 0.8) +
+    geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.5) +
+    scale_color_brewer(palette = "Set2", name = "Region") +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(x = "Event time (years relative to tax cut)", y = label) +
+    theme(legend.position = "bottom") +
+    scale_y_log10(labels = scales::label_comma())
+}
+
+# Country event-time spaghetti (EAP only): one line per country, treated only
+plot_country_event_spaghetti <- function(data, outcome_var, label) {
+  country_means <- data |>
+    filter(region == "EAP", first_treated_year > 0, !is.na(.data[[outcome_var]])) |>
+    mutate(event_time = year - first_treated_year) |>
+    group_by(ccode, country, event_time) |>
+    summarise(
+      mean = mean(.data[[outcome_var]], na.rm = TRUE),
+      se   = sd(.data[[outcome_var]], na.rm = TRUE) / sqrt(n()),
+      .groups = "drop"
+    )
+
+  ggplot(country_means, aes(x = event_time, y = mean, color = country, fill = country)) +
+    geom_ribbon(aes(ymin = mean - se, ymax = mean + se), alpha = 0.15, linewidth = 0) +
+    geom_line(linewidth = 0.6) +
+    geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.5) +
+    labs(x = "Event time (years relative to tax cut)", y = label, color = "Country") +
+    theme(legend.position = "bottom") +
+    guides(fill = "none") +
+    scale_y_log10(labels = scales::label_comma())
+}
 ```
 
-## Design
+## Research design
 
-Absorbing binary treatment: once a country cuts taxes, it stays treated forever. The `did` package (Callaway & Sant'Anna 2021) handles staggered adoption and provides group-time ATTs with built-in pre-trend diagnostics.
+Absorbing binary treatment: once a country cuts taxes, it stays treated forever. Countries with multiple tax cut episodes are assigned the **first** episode as the treatment date; subsequent cuts are subsumed into the post-treatment period. The `did` package [@callaway2021] handles staggered adoption and provides group-time ATTs with built-in pre-trend diagnostics.
+
+Countries with multiple tax cut episodes: Take first episode as absorbing treatment.
 
 - **Panel window**: 2006--2017 (balanced; firms observed in all 12 years)
 - **Control group**: not-yet-treated
@@ -65,155 +236,316 @@ Absorbing binary treatment: once a country cuts taxes, it stays treated forever.
 - **Covariates**: none (unconditional)
 - **Outcomes**: log-transformed (log investment, log employment)
 
-## Treatment summary
+## Data
+
+### Treatment summary
 
 ```{r}
-#| label: tbl-treatment-summary
+#| label: fig-treatment-summary
+#| fig-cap: "Countries by first treatment year and region"
 
 bind_rows(
   did_data_cit |>
-    distinct(ccode, first_treated_year) |>
+    distinct(ccode, first_treated_year, region) |>
     mutate(treatment = "CIT"),
   did_data_pit |>
-    distinct(ccode, first_treated_year) |>
+    distinct(ccode, first_treated_year, region) |>
     mutate(treatment = "PIT")
 ) |>
+  filter(!is.na(region)) |>
   mutate(
-    status = if_else(first_treated_year == 0, "Never treated", as.character(first_treated_year))
-  ) |>
-  count(treatment, status) |>
-  pivot_wider(names_from = treatment, values_from = n, values_fill = 0) |>
-  arrange(status) |>
-  tt(caption = "Countries by first treatment year")
-```
-
-
-## Corporate Income Tax (CIT)
-
-::: {#fig-did-cit layout-ncol=2}
-
-```{r}
-#| label: fig-did-cit-investments
-#| fig-cap: "Investment"
-did_plots$cit_investments
-```
-
-```{r}
-#| label: fig-did-cit-employees
-#| fig-cap: "Employment"
-did_plots$cit_employees
-```
-
-Event-study: effect of CIT cuts on firm-level outcomes
-:::
-
-```{r}
-#| label: tbl-did-cit-att
-
-tibble(
-  Outcome = c("log(Investment)", "log(Employment)"),
-  ATT = c(
-    did_results$cit_investments$overall$overall.att,
-    did_results$cit_employees$overall$overall.att
-  ),
-  SE = c(
-    did_results$cit_investments$overall$overall.se,
-    did_results$cit_employees$overall$overall.se
-  )
-) |>
-  mutate(
-    `95% CI` = paste0(
-      "[", sprintf("%.3f", ATT - 1.96 * SE), ", ",
-      sprintf("%.3f", ATT + 1.96 * SE), "]"
+    year_label = if_else(
+      first_treated_year == 0, "Never\ntreated",
+      as.character(first_treated_year)
     ),
-    across(c(ATT, SE), \(x) sprintf("%.3f", x))
+    region = factor(region, levels = c("EAP", "MIC", "HIC"))
   ) |>
-  tt(caption = "Overall ATT — CIT cuts")
+  ggplot(aes(x = year_label, fill = region)) +
+  geom_bar() +
+  facet_wrap(~treatment) +
+  scale_fill_brewer(palette = "Set2", name = "Region") +
+  labs(x = "First treatment year", y = "Number of countries") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8), legend.position = "bottom")
 ```
 
-### Pre-trend diagnostics (CIT)
+
 
 ```{r}
-#| label: tbl-did-cit-pretrend
+#| label: tbl-regional-stats
+#| tbl-cap: "Panel composition by region"
 
 bind_rows(
-  extract_pretrend(did_results$cit_investments$event_study) |>
-    mutate(outcome = "log(Investment)"),
-  extract_pretrend(did_results$cit_employees$event_study) |>
-    mutate(outcome = "log(Employment)")
+  did_data_cit |> mutate(treatment = "CIT"),
+  did_data_pit |> mutate(treatment = "PIT")
 ) |>
-  mutate(across(c(att, se, lower, upper), \(x) sprintf("%.4f", x))) |>
-  select(Outcome = outcome, `Event time` = e, ATT = att, SE = se,
-         Lower = lower, Upper = upper, Sig = sig) |>
-  tt(caption = "Pre-treatment event-study coefficients (should be ~0 for parallel trends)")
+  filter(!is.na(region)) |>
+  group_by(treatment, region) |>
+  summarise(
+    countries       = n_distinct(ccode),
+    firms           = n_distinct(firm_id),
+    n_treated       = n_distinct(ccode[first_treated_year > 0]),
+    share_treated   = n_treated / countries,
+    median_treat_yr = median(
+      unique(first_treated_year[first_treated_year > 0]), na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) |>
+  mutate(
+    share_treated   = sprintf("%.0f%%", share_treated * 100),
+    median_treat_yr = if_else(is.na(median_treat_yr), "—", as.character(median_treat_yr))
+  ) |>
+  select(
+    Treatment = treatment, Region = region,
+    Countries = countries, Firms = firms,
+    Treated = n_treated, `Share treated` = share_treated,
+    `Median treat year` = median_treat_yr
+  ) |>
+  tt()
+```
+
+### Raw outcome trends
+
+```{r}
+#| label: fig-outcome-boxplots
+#| fig-cap: "Distribution of outcome variables by region. Log scale, 2016."
+#| fig-alt: "Mean firm in each region"
+did_data_cit |>
+  filter(year == max(year), !is.na(region)) |>
+  select(region, `Investments (USD)` = investments, Employees = employees) |>
+  pivot_longer(!region) |>
+  # mutate(name = str_to_title(name)) |>
+  ggplot(aes(region, value, fill = region)) +
+  geom_boxplot(alpha = 0.6) +
+  facet_wrap(~name, scales = "free_y") +
+  scale_y_log10(labels = scales::label_comma()) +
+  labs(
+    x = "",
+    y = ""
+  ) +
+  theme(legend.position = "none")
+
 ```
 
 
-## Personal Income Tax (PIT)
-
-::: {#fig-did-pit layout-ncol=2}
+::: {#fig-region-trends-log10 layout-ncol="1"}
 
 ```{r}
-#| label: fig-did-pit-investments
+#| label: fig-regional-investment-log10
 #| fig-cap: "Investment"
-did_plots$pit_investments
+#| fig-height: 4
+plot_regional_spaghetti_log10(did_data_cit, "investments", "Investment (USD)")
 ```
 
 ```{r}
-#| label: fig-did-pit-employees
+#| label: fig-regional-employment-log10
 #| fig-cap: "Employment"
-did_plots$pit_employees
+#| fig-height: 4
+plot_regional_spaghetti_log10(did_data_cit, "employees", "Employees")
 ```
 
-Event-study: effect of PIT cuts on firm-level outcomes
+Firm-level mean outcome by region, log scale (± 1 SE)
 :::
 
-```{r}
-#| label: tbl-did-pit-att
+::: {#fig-region-trends-indexed layout-ncol="1"}
 
-tibble(
-  Outcome = c("log(Investment)", "log(Employment)"),
-  ATT = c(
-    did_results$pit_investments$overall$overall.att,
-    did_results$pit_employees$overall$overall.att
-  ),
-  SE = c(
-    did_results$pit_investments$overall$overall.se,
-    did_results$pit_employees$overall$overall.se
-  )
-) |>
-  mutate(
-    `95% CI` = paste0(
-      "[", sprintf("%.3f", ATT - 1.96 * SE), ", ",
-      sprintf("%.3f", ATT + 1.96 * SE), "]"
-    ),
-    across(c(ATT, SE), \(x) sprintf("%.3f", x))
+```{r}
+#| label: fig-regional-investment-indexed
+#| fig-cap: "Investment"
+#| fig-height: 4
+plot_regional_spaghetti_indexed(did_data_cit, "investments", "Investment") +
+  scale_y_continuous(breaks = seq(100, 900, 200))
+```
+
+```{r}
+#| label: fig-regional-employment-indexed
+#| fig-cap: "Employment"
+#| fig-height: 4
+plot_regional_spaghetti_indexed(did_data_cit, "employees", "Employment") +
+  scale_y_continuous(breaks = seq(100, 200, 25))
+```
+
+Firm-level mean outcome growth by region, indexed to 2006 = 100 (± 1 SE)
+:::
+
+
+::: {#fig-country-trends layout-ncol="1"}
+```{r}
+#| label: fig-eap-investment
+#| fig-cap: "Investment"
+#| fig-height: 8
+
+plot_country_spaghetti(did_data_cit, "investments", "Investment (USD)")
+```
+
+```{r}
+#| label: fig-eap-employment
+#| fig-cap: "Employment"
+#| fig-height: 8
+
+plot_country_spaghetti(did_data_cit, "employees", "Employees")
+```
+
+Firm-level mean outcomes by country along with tax cut episodes, South East Asia (± 1 SE, log scale)
+:::
+
+
+### Event-time trends
+
+Raw means on event time for CIT-treated countries. Event time 0 marks the year of the tax cut.
+
+::: {#fig-region-event-trends layout-ncol="2"}
+```{r}
+#| label: fig-regional-event-investment-cit
+#| fig-cap: "CIT, Investment"
+#| fig-height: 5
+plot_regional_event_spaghetti(did_data_cit, "investments", "Investment (USD)")
+```
+
+```{r}
+#| label: fig-regional-event-investment-pit
+#| fig-cap: "PIT, Investment"
+#| fig-height: 5
+plot_regional_event_spaghetti(did_data_pit, "investments", "Investment (USD)")
+```
+
+```{r}
+#| label: fig-regional-event-employment-cit
+#| fig-cap: "CIT, Employment"
+#| fig-height: 5
+plot_regional_event_spaghetti(did_data_cit, "employees", "Employment")
+```
+
+```{r}
+#| label: fig-regional-event-employment-pit
+#| fig-cap: "PIT, Employment"
+#| fig-height: 5
+plot_regional_event_spaghetti(did_data_pit, "employees", "Employment")
+```
+
+Firm-level mean outcomes by region on event time (± 1 SE, log scale). Treated countries only.
+:::
+
+
+::: {#fig-country-event-trends layout-ncol="2"}
+```{r}
+#| label: fig-eap-event-investment-cit
+#| fig-cap: "CIT, Investment"
+#| fig-height: 5
+plot_country_event_spaghetti(did_data_cit, "investments", "Investment (USD)")
+```
+
+
+```{r}
+#| label: fig-eap-event-investment-pit
+#| fig-cap: "PIT, Investment"
+#| fig-height: 5
+plot_country_event_spaghetti(did_data_pit, "investments", "Investment (USD)")
+```
+
+```{r}
+#| label: fig-eap-event-employment-cit
+#| fig-cap: "CIT, Employment"
+#| fig-height: 5
+plot_country_event_spaghetti(did_data_cit, "employees", "Employment")
+```
+
+
+```{r}
+#| label: fig-eap-event-employment-pit
+#| fig-cap: "PIT, Employment"
+#| fig-height: 5
+plot_country_event_spaghetti(did_data_pit, "employees", "Employment")
+```
+
+Firm-level mean outcomes by country on event time (± 1 SE, log scale). South East Asia treated only.
+:::
+
+## Results
+
+### World ATT
+
+::: {#fig-did-cit-event-studies}
+
+```{r}
+#| fig-height: 4
+#| layout-ncol: 2
+
+for (out_id in names(did_outcomes())) {
+  bid <- paste("cit", out_id, sep = "_")
+  print(did_plots[[bid]])
+}
+```
+
+Event-study: CIT cut effects on firm-level outcomes
+:::
+
+
+
+::: {#fig-did-pit-event-studies}
+
+```{r}
+#| fig-height: 4
+#| layout-ncol: 2
+
+for (out_id in names(did_outcomes())) {
+  bid <- paste("pit", out_id, sep = "_")
+  print(did_plots[[bid]])
+}
+```
+
+Event-study: PIT cut effects on firm-level outcomes
+:::
+
+
+```{r}
+#| label: tbl-did-summary
+#| tbl-cap: "Overall ATT estimates"
+
+treatments <- did_treatments()
+outcomes   <- did_outcomes()
+tx_labels  <- c(cit = "CIT", pit = "PIT")
+
+summary_rows <- purrr::map_dfr(names(treatments), \(tx) {
+  cells <- purrr::map(names(outcomes), \(out) {
+    bid <- paste(tx, out, sep = "_")
+    res <- did_results[[bid]]
+    att <- res$overall$overall.att
+    se  <- res$overall$overall.se
+    n   <- nrow(did_models[[bid]]$DIDparams$data)
+    list(att = att, se = se, n = n)
+  }) |> setNames(names(outcomes))
+
+  tibble(
+    ` ` = c(tx_labels[[tx]], "", ""),
+    row_type = c("att", "se", "n"),
+    !!!purrr::imap(cells, \(c, out_id) {
+      label <- outcomes[[out_id]]$label
+      c(sprintf("%.3f", c$att),
+        sprintf("(%.3f)", c$se),
+        sprintf("N = %s", scales::comma(c$n)))
+    })
   ) |>
-  tt(caption = "Overall ATT — PIT cuts")
-```
+    rename(!!!setNames(names(outcomes), purrr::map_chr(outcomes, "label")))
+})
 
-### Pre-trend diagnostics (PIT)
+n_tx <- length(treatments)
+n_rows_per_tx <- 3L
+midrule_rows <- seq(n_rows_per_tx, (n_tx - 1) * n_rows_per_tx, by = n_rows_per_tx)
 
-```{r}
-#| label: tbl-did-pit-pretrend
-
-bind_rows(
-  extract_pretrend(did_results$pit_investments$event_study) |>
-    mutate(outcome = "log(Investment)"),
-  extract_pretrend(did_results$pit_employees$event_study) |>
-    mutate(outcome = "log(Employment)")
-) |>
-  mutate(across(c(att, se, lower, upper), \(x) sprintf("%.4f", x))) |>
-  select(Outcome = outcome, `Event time` = e, ATT = att, SE = se,
-         Lower = lower, Upper = upper, Sig = sig) |>
-  tt(caption = "Pre-treatment event-study coefficients (should be ~0 for parallel trends)")
+summary_rows |>
+  select(-row_type) |>
+  tt() |>
+  style_tt(i = midrule_rows, line = "b", line_color = "black")
 ```
 
 
-## Interpretation
+At the whole world level, there is little to say about the causal effect of tax cuts on firm-level results. Overall, parallel pre-trends do not hold. A reason this may happen is because of the endogeneity with which tax cuts may happen; fiscal policy may be responding to a particular economic environment, which is itself a lack of parallel pre-trends.
 
-<!-- Human: fill in interpretation after reviewing results.
-     Key questions:
-     - Do pre-trend coefficients support parallel trends?
-     - Are overall ATTs economically meaningful?
-     - How do CIT vs PIT effects compare? -->
+### Region level ATT
+
+
+
+
+### Country level ATT in South East Asia
+
+### References

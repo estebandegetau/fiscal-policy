@@ -24,6 +24,7 @@ docs/**/*.pdf
 # Output files (reproducible from code)
 output/*
 !output/.gitkeep
+*.typ
 
 # Python
 __pycache__/
