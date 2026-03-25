@@ -236,9 +236,81 @@ plot_did_event_study <- function(aggte_obj, title = "") {
 }
 
 
+# --- Scope & spec helpers -----------------------------------------------------
+
+#' Parse a three-part block ID into scope, treatment, and outcome
+#'
+#' Block IDs have the form {scope}_{tx}_{outcome}. Scope tokens (world, EAP,
+#' MIC, HIC, or 3-letter country codes) and tx tokens (cit, pit) never contain
+#' underscores, so we split on "_" and take the first two parts; the remainder
+#' (which may contain underscores, e.g. "total_assets") is the outcome.
+#'
+#' @param bid Character: block ID string
+#' @return Named list with elements scope, tx, outcome
+parse_block_id <- function(bid) {
+  parts <- strsplit(bid, "_", fixed = TRUE)[[1]]
+  list(
+    scope   = parts[1],
+    tx      = parts[2],
+    outcome = paste(parts[-(1:2)], collapse = "_")
+  )
+}
+
+
+#' Build the full specification tibble for DiD estimation
+#'
+#' Crosses scope × treatment × outcome. Scopes include "world", three regions
+#' (EAP, MIC, HIC), and all EAP country codes discovered from the data.
+#'
+#' @param did_data_list Named list of prepared data (one per treatment key)
+#' @return Tibble with columns: scope, scope_type, tx, outcome, block_id
+did_spec <- function(did_data_list) {
+  # Discover EAP country codes at runtime
+  sample_data <- did_data_list[[1]]
+  eap_ccodes <- sample_data |>
+    dplyr::filter(region == "EAP") |>
+    dplyr::distinct(ccode) |>
+    dplyr::pull(ccode) |>
+    sort()
+
+  scopes <- c("world", "EAP", "MIC", "HIC", eap_ccodes)
+  scope_types <- c(
+    world = "world",
+    EAP = "region", MIC = "region", HIC = "region",
+    stats::setNames(rep("country", length(eap_ccodes)), eap_ccodes)
+  )
+
+  tidyr::expand_grid(
+    scope   = scopes,
+    tx      = names(did_treatments()),
+    outcome = names(did_outcomes())
+  ) |>
+    dplyr::mutate(
+      scope_type = scope_types[scope],
+      block_id   = paste(scope, tx, outcome, sep = "_")
+    )
+}
+
+
+#' Filter prepared DiD data to a geographic scope
+#'
+#' @param data Tibble from prepare_did_data()
+#' @param scope Character: "world", a region name, or a country code
+#' @param scope_type Character: "world", "region", or "country"
+#' @return Filtered tibble
+filter_did_scope <- function(data, scope, scope_type) {
+  switch(scope_type,
+    world   = data,
+    region  = dplyr::filter(data, region == scope),
+    country = dplyr::filter(data, ccode == scope)
+  )
+}
+
+
 # --- Batch wrappers -----------------------------------------------------------
 
 #' Canonical list of DiD block IDs (treatment × outcome)
+#' @note Superseded by did_spec() for scope-aware estimation.
 did_block_ids <- function() {
   tx_ids  <- names(did_treatments())
   out_ids <- names(did_outcomes())
@@ -246,32 +318,42 @@ did_block_ids <- function() {
 }
 
 
-#' Run all DiD estimations across treatment × outcome combinations
+#' Run all DiD estimations across scope × treatment × outcome combinations
 #'
 #' @param did_data_list Named list of prepared data (one per treatment)
-#' @return Named list of att_gt objects, keyed by block_id
+#' @return Named list of att_gt objects (or NULL for failed estimations),
+#'   keyed by block_id ({scope}_{tx}_{outcome})
 run_all_did_blocks <- function(did_data_list) {
   outcomes <- did_outcomes()
+  spec <- did_spec(did_data_list)
 
-  did_block_ids() |>
+  spec$block_id |>
     purrr::set_names() |>
     purrr::map(\(bid) {
-      # Parse block_id
-      tx_id  <- sub("_.*", "", bid)
-      out_id <- sub("^[^_]+_", "", bid)
-      out    <- outcomes[[out_id]]
-
-      run_did_estimation(did_data_list[[tx_id]], out$var)
+      row <- spec[spec$block_id == bid, ]
+      data_scoped <- filter_did_scope(
+        did_data_list[[row$tx]], row$scope, row$scope_type
+      )
+      tryCatch(
+        run_did_estimation(data_scoped, outcomes[[row$outcome]]$var),
+        error = function(e) {
+          warning(sprintf("DiD estimation failed for %s: %s", bid, e$message))
+          NULL
+        }
+      )
     })
 }
 
 
 #' Aggregate all DiD results (event-study + overall ATT)
 #'
+#' NULL entries (failed estimations) are dropped before aggregation.
+#'
 #' @param did_models Named list of att_gt objects from run_all_did_blocks()
 #' @return Named list of lists (each with event_study and overall)
 aggregate_all_did_results <- function(did_models) {
   did_models |>
+    purrr::discard(is.null) |>
     purrr::map(\(att_gt_obj) aggregate_did_results(att_gt_obj))
 }
 
@@ -281,16 +363,18 @@ aggregate_all_did_results <- function(did_models) {
 #' @param did_results Named list from aggregate_all_did_results()
 #' @return Named list of ggplot objects
 plot_all_did_event_studies <- function(did_results) {
-  treatments <- did_treatments()
-  outcomes   <- did_outcomes()
-
+  outcomes  <- did_outcomes()
   tx_labels <- c(cit = "CIT", pit = "PIT")
 
   did_results |>
     purrr::imap(\(res, bid) {
-      tx_id  <- sub("_.*", "", bid)
-      out_id <- sub("^[^_]+_", "", bid)
-      title  <- paste0(tx_labels[[tx_id]], " Cut \u2192 ", outcomes[[out_id]]$label)
+      parsed <- parse_block_id(bid)
+      scope_label <- if (parsed$scope == "world") "" else paste0(parsed$scope, ": ")
+      title <- paste0(
+        scope_label,
+        tx_labels[[parsed$tx]], " Cut \u2192 ",
+        outcomes[[parsed$outcome]]$label
+      )
       plot_did_event_study(res$event_study, title = title)
     })
 }

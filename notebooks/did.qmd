@@ -222,6 +222,50 @@ plot_country_event_spaghetti <- function(data, outcome_var, label) {
     guides(fill = "none") +
     scale_y_log10(labels = scales::label_comma())
 }
+
+# Summary table builder for any scope
+build_did_summary_table <- function(scope_prefix, did_results, did_models) {
+  treatments <- did_treatments()
+  outcomes   <- did_outcomes()
+  tx_labels  <- c(cit = "CIT", pit = "PIT")
+
+  summary_rows <- purrr::map_dfr(names(treatments), \(tx) {
+    cells <- purrr::map(names(outcomes), \(out) {
+      bid <- paste(scope_prefix, tx, out, sep = "_")
+      res <- did_results[[bid]]
+      mod <- did_models[[bid]]
+      if (is.null(res) || is.null(mod)) {
+        return(list(att = NA_real_, se = NA_real_, n = NA_integer_))
+      }
+      list(
+        att = res$overall$overall.att,
+        se  = res$overall$overall.se,
+        n   = nrow(mod$DIDparams$data)
+      )
+    }) |> setNames(names(outcomes))
+
+    tibble(
+      ` ` = c(tx_labels[[tx]], "", ""),
+      row_type = c("att", "se", "n"),
+      !!!purrr::imap(cells, \(c, out_id) {
+        if (is.na(c$att)) return(rep("—", 3))
+        c(sprintf("%.3f", c$att),
+          sprintf("(%.3f)", c$se),
+          sprintf("N = %s", scales::comma(c$n)))
+      })
+    ) |>
+      rename(!!!setNames(names(outcomes), purrr::map_chr(outcomes, "label")))
+  })
+
+  n_tx <- length(treatments)
+  n_rows_per_tx <- 3L
+  midrule_rows <- seq(n_rows_per_tx, (n_tx - 1) * n_rows_per_tx, by = n_rows_per_tx)
+
+  summary_rows |>
+    select(-row_type) |>
+    tt() |>
+    style_tt(i = midrule_rows, line = "b", line_color = "black")
+}
 ```
 
 ## Research design
@@ -471,8 +515,8 @@ Firm-level mean outcomes by country on event time (± 1 SE, log scale). South Ea
 #| layout-ncol: 2
 
 for (out_id in names(did_outcomes())) {
-  bid <- paste("cit", out_id, sep = "_")
-  print(did_plots[[bid]])
+  bid <- paste("world", "cit", out_id, sep = "_")
+  if (!is.null(did_plots[[bid]])) print(did_plots[[bid]])
 }
 ```
 
@@ -488,8 +532,8 @@ Event-study: CIT cut effects on firm-level outcomes
 #| layout-ncol: 2
 
 for (out_id in names(did_outcomes())) {
-  bid <- paste("pit", out_id, sep = "_")
-  print(did_plots[[bid]])
+  bid <- paste("world", "pit", out_id, sep = "_")
+  if (!is.null(did_plots[[bid]])) print(did_plots[[bid]])
 }
 ```
 
@@ -501,41 +545,7 @@ Event-study: PIT cut effects on firm-level outcomes
 #| label: tbl-did-summary
 #| tbl-cap: "Overall ATT estimates"
 
-treatments <- did_treatments()
-outcomes   <- did_outcomes()
-tx_labels  <- c(cit = "CIT", pit = "PIT")
-
-summary_rows <- purrr::map_dfr(names(treatments), \(tx) {
-  cells <- purrr::map(names(outcomes), \(out) {
-    bid <- paste(tx, out, sep = "_")
-    res <- did_results[[bid]]
-    att <- res$overall$overall.att
-    se  <- res$overall$overall.se
-    n   <- nrow(did_models[[bid]]$DIDparams$data)
-    list(att = att, se = se, n = n)
-  }) |> setNames(names(outcomes))
-
-  tibble(
-    ` ` = c(tx_labels[[tx]], "", ""),
-    row_type = c("att", "se", "n"),
-    !!!purrr::imap(cells, \(c, out_id) {
-      label <- outcomes[[out_id]]$label
-      c(sprintf("%.3f", c$att),
-        sprintf("(%.3f)", c$se),
-        sprintf("N = %s", scales::comma(c$n)))
-    })
-  ) |>
-    rename(!!!setNames(names(outcomes), purrr::map_chr(outcomes, "label")))
-})
-
-n_tx <- length(treatments)
-n_rows_per_tx <- 3L
-midrule_rows <- seq(n_rows_per_tx, (n_tx - 1) * n_rows_per_tx, by = n_rows_per_tx)
-
-summary_rows |>
-  select(-row_type) |>
-  tt() |>
-  style_tt(i = midrule_rows, line = "b", line_color = "black")
+build_did_summary_table("world", did_results, did_models)
 ```
 
 
@@ -543,9 +553,110 @@ At the whole world level, there is little to say about the causal effect of tax 
 
 ### Region level ATT
 
+::: {.panel-tabset}
 
+```{r}
+#| label: fig-did-region-event-studies
+#| results: asis
+
+region_scopes <- c("EAP", "MIC", "HIC")
+
+for (reg in region_scopes) {
+  cat(sprintf("\n#### %s\n\n", reg))
+
+  cat("::: {layout-ncol=\"2\"}\n\n")
+  for (tx in c("cit", "pit")) {
+    for (out_id in names(did_outcomes())) {
+      bid <- paste(reg, tx, out_id, sep = "_")
+      if (!is.null(did_plots[[bid]])) {
+        print(did_plots[[bid]])
+        cat("\n\n")
+      }
+    }
+  }
+  cat(":::\n\n")
+}
+```
+
+:::
+
+```{r}
+#| label: tbl-did-region-summary
+#| tbl-cap: "Overall ATT estimates by region"
+#| results: asis
+
+for (reg in c("EAP", "MIC", "HIC")) {
+  cat(sprintf("\n**%s**\n\n", reg))
+  print(build_did_summary_table(reg, did_results, did_models))
+  cat("\n\n")
+}
+```
 
 
 ### Country level ATT in South East Asia
+
+```{r}
+#| label: country-scopes
+#| include: false
+
+# Discover EAP country scopes from the results
+known_scopes <- c("world", "EAP", "MIC", "HIC")
+all_scopes <- unique(purrr::map_chr(strsplit(names(did_results), "_"), 1))
+country_scopes <- setdiff(all_scopes, known_scopes)
+
+# Map ccodes to country names for labels
+country_labels <- did_data_cit |>
+  filter(ccode %in% country_scopes) |>
+  distinct(ccode, country) |>
+  deframe()
+```
+
+::: {.panel-tabset}
+
+```{r}
+#| label: fig-did-country-event-studies
+#| results: asis
+
+for (cc in country_scopes) {
+  # Skip countries where all estimations failed
+  bids <- paste(cc, rep(c("cit", "pit"), each = length(did_outcomes())),
+                rep(names(did_outcomes()), 2), sep = "_")
+  if (all(sapply(bids, \(b) is.null(did_results[[b]])))) next
+
+  label <- country_labels[cc] %||% cc
+  cat(sprintf("\n#### %s (%s)\n\n", label, cc))
+
+  cat("::: {layout-ncol=\"2\"}\n\n")
+  for (tx in c("cit", "pit")) {
+    for (out_id in names(did_outcomes())) {
+      bid <- paste(cc, tx, out_id, sep = "_")
+      if (!is.null(did_plots[[bid]])) {
+        print(did_plots[[bid]])
+        cat("\n\n")
+      }
+    }
+  }
+  cat(":::\n\n")
+}
+```
+
+:::
+
+```{r}
+#| label: tbl-did-country-summary
+#| tbl-cap: "Overall ATT estimates by EAP country"
+#| results: asis
+
+for (cc in country_scopes) {
+  bids <- paste(cc, rep(c("cit", "pit"), each = length(did_outcomes())),
+                rep(names(did_outcomes()), 2), sep = "_")
+  if (all(sapply(bids, \(b) is.null(did_results[[b]])))) next
+
+  label <- country_labels[cc] %||% cc
+  cat(sprintf("\n**%s (%s)**\n\n", label, cc))
+  print(build_did_summary_table(cc, did_results, did_models))
+  cat("\n\n")
+}
+```
 
 ### References
