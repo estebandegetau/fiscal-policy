@@ -1,7 +1,7 @@
 ---
 title: "Phase 2: Firm-Level Difference-in-Differences"
 execute:
-  cache: refresh
+  cache: true
 ---
 
 ```{r}
@@ -559,107 +559,67 @@ At the whole world level, there is little to say about the causal effect of tax 
 
 ::: {.panel-tabset}
 
+#### EAP
+
 ```{r}
-#| label: fig-did-region-event-studies
-#| results: asis
+#| label: fig-did-eap-event-studies
+#| fig-height: 4
+#| layout-ncol: 2
 
-region_scopes <- c("EAP", "MIC", "HIC")
-
-for (reg in region_scopes) {
-  cat(sprintf("\n#### %s\n\n", reg))
-
-  cat("::: {layout-ncol=\"2\"}\n\n")
+for (out_id in names(did_outcomes())) {
   for (tx in c("cit", "pit")) {
-    for (out_id in names(did_outcomes())) {
-      bid <- paste(reg, tx, out_id, sep = "_")
-      p <- did_es_plot(bid, did_summaries)
-      if (!is.null(p)) {
-        print(p)
-        cat("\n\n")
-      }
-    }
+    p <- did_es_plot(paste("EAP", tx, out_id, sep = "_"), did_summaries)
+    if (!is.null(p)) print(p)
   }
-  cat(":::\n\n")
 }
+```
+
+```{r}
+#| label: tbl-did-eap-summary
+build_did_summary_table("EAP", did_summaries)
+```
+
+#### MIC
+
+```{r}
+#| label: fig-did-mic-event-studies
+#| fig-height: 4
+#| layout-ncol: 2
+
+for (out_id in names(did_outcomes())) {
+  for (tx in c("cit", "pit")) {
+    p <- did_es_plot(paste("MIC", tx, out_id, sep = "_"), did_summaries)
+    if (!is.null(p)) print(p)
+  }
+}
+```
+
+```{r}
+#| label: tbl-did-mic-summary
+build_did_summary_table("MIC", did_summaries)
+```
+
+#### HIC
+
+```{r}
+#| label: fig-did-hic-event-studies
+#| fig-height: 4
+#| layout-ncol: 2
+
+for (out_id in names(did_outcomes())) {
+  for (tx in c("cit", "pit")) {
+    p <- did_es_plot(paste("HIC", tx, out_id, sep = "_"), did_summaries)
+    if (!is.null(p)) print(p)
+  }
+}
+```
+
+```{r}
+#| label: tbl-did-hic-summary
+build_did_summary_table("HIC", did_summaries)
 ```
 
 :::
 
-```{r}
-#| label: tbl-did-region-summary
-#| tbl-cap: "Overall ATT estimates by region"
-#| results: asis
-
-for (reg in c("EAP", "MIC", "HIC")) {
-  cat(sprintf("\n**%s**\n\n", reg))
-  print(build_did_summary_table(reg, did_summaries))
-  cat("\n\n")
-}
-```
-
-
-### Country level ATT in South East Asia
-
-```{r}
-#| label: country-scopes
-#| include: false
-
-# Discover EAP country scopes from the summaries
-known_scopes <- c("world", "EAP", "MIC", "HIC")
-country_scopes <- setdiff(unique(did_summaries$scope), known_scopes)
-
-# Map ccodes to country names for labels
-country_labels <- did_data_cit |>
-  filter(ccode %in% country_scopes) |>
-  distinct(ccode, country) |>
-  deframe()
-```
-
-::: {.panel-tabset}
-
-```{r}
-#| label: fig-did-country-event-studies
-#| results: asis
-
-for (cc in country_scopes) {
-  # Skip countries where all estimations failed
-  cc_data <- did_summaries |> filter(scope == cc)
-  if (nrow(cc_data) == 0) next
-
-  label <- country_labels[cc] %||% cc
-  cat(sprintf("\n#### %s (%s)\n\n", label, cc))
-
-  cat("::: {layout-ncol=\"2\"}\n\n")
-  for (tx in c("cit", "pit")) {
-    for (out_id in names(did_outcomes())) {
-      bid <- paste(cc, tx, out_id, sep = "_")
-      p <- did_es_plot(bid, did_summaries)
-      if (!is.null(p)) {
-        print(p)
-        cat("\n\n")
-      }
-    }
-  }
-  cat(":::\n\n")
-}
-```
-
-:::
-
-```{r}
-#| label: tbl-did-country-summary
-#| tbl-cap: "Overall ATT estimates by EAP country"
-#| results: asis
-
-for (cc in country_scopes) {
-  cc_data <- did_summaries |> filter(scope == cc)
-  if (nrow(cc_data) == 0) next
-
-  label <- country_labels[cc] %||% cc
-  cat(sprintf("\n**%s (%s)**\n\n", label, cc))
-  print(build_did_summary_table(cc, did_summaries))
-  cat("\n\n")
-}
-```
 
 ### References

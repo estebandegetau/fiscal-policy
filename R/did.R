@@ -245,26 +245,14 @@ parse_block_id <- function(bid) {
 
 #' Build the full specification tibble for DiD estimation
 #'
-#' Crosses scope × treatment × outcome. Scopes include "world", three regions
-#' (EAP, MIC, HIC), and all EAP country codes discovered from the data.
+#' Crosses scope × treatment × outcome. Scopes: "world" plus three regions
+#' (EAP, MIC, HIC). Country-level estimation is infeasible because treatment
+#' is assigned at country level (no within-country control firms).
 #'
-#' @param did_data_list Named list of prepared data (one per treatment key)
 #' @return Tibble with columns: scope, scope_type, tx, outcome, block_id
-did_spec <- function(did_data_list) {
-  # Discover EAP country codes at runtime
-  sample_data <- did_data_list[[1]]
-  eap_ccodes <- sample_data |>
-    dplyr::filter(region == "EAP") |>
-    dplyr::distinct(ccode) |>
-    dplyr::pull(ccode) |>
-    sort()
-
-  scopes <- c("world", "EAP", "MIC", "HIC", eap_ccodes)
-  scope_types <- c(
-    world = "world",
-    EAP = "region", MIC = "region", HIC = "region",
-    stats::setNames(rep("country", length(eap_ccodes)), eap_ccodes)
-  )
+did_spec <- function() {
+  scopes      <- c("world", "EAP", "MIC", "HIC")
+  scope_types <- c(world = "world", EAP = "region", MIC = "region", HIC = "region")
 
   tidyr::expand_grid(
     scope   = scopes,
@@ -281,14 +269,13 @@ did_spec <- function(did_data_list) {
 #' Filter prepared DiD data to a geographic scope
 #'
 #' @param data Tibble from prepare_did_data()
-#' @param scope Character: "world", a region name, or a country code
-#' @param scope_type Character: "world", "region", or "country"
+#' @param scope Character: "world" or a region name (EAP, MIC, HIC)
+#' @param scope_type Character: "world" or "region"
 #' @return Filtered tibble
 filter_did_scope <- function(data, scope, scope_type) {
   switch(scope_type,
-    world   = data,
-    region  = dplyr::filter(data, region == scope),
-    country = dplyr::filter(data, ccode == scope)
+    world  = data,
+    region = dplyr::filter(data, region == scope)
   )
 }
 
@@ -303,7 +290,7 @@ filter_did_scope <- function(data, scope, scope_type) {
 #'   keyed by block_id ({scope}_{tx}_{outcome})
 run_all_did_blocks <- function(did_data_list) {
   outcomes <- did_outcomes()
-  spec <- did_spec(did_data_list)
+  spec <- did_spec()
 
   spec$block_id |>
     purrr::set_names() |>
