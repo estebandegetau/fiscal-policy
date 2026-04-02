@@ -1,7 +1,7 @@
 ---
 title: "Phase 2: Firm-Level Difference-in-Differences"
 execute:
-  cache: true
+  cache: false
 ---
 
 ```{r}
@@ -17,7 +17,9 @@ pacman::p_load(
   tidyverse,
   did,
   tinytable,
-  here
+  patchwork,
+  here,
+  labelled
 )
 
 here::i_am("notebooks/did.qmd")
@@ -54,16 +56,59 @@ extract_pretrend <- function(es_data) {
 }
 
 # Build a titled event-study plot from did_summaries for a given block_id
-did_es_plot <- function(bid, did_summaries) {
+did_es_plot <- function(bid, did_summaries, title_prefix = NULL) {
   row <- did_summaries |> filter(block_id == bid)
   if (nrow(row) == 0) return(NULL)
 
-  tx_labels <- c(cit = "CIT", pit = "PIT")
   outcomes  <- did_outcomes()
-  scope_label <- if (row$scope == "world") "" else paste0(row$scope, ": ")
-  title <- paste0(scope_label, tx_labels[[row$tx]],
-                  " Cut \u2192 ", outcomes[[row$outcome]]$label)
+  label <- outcomes[[row$outcome]]$label
+  title <- if (!is.null(title_prefix)) paste(title_prefix, "-", label) else label
   plot_did_event_study(row$event_study[[1]], row$event_study_crit_val, title)
+}
+
+# Compose a patchwork panel of event-study plots for one region
+# Layout: rows = outcomes, col 1 = CIT, col 2 = PIT
+build_region_es_panel <- function(scope, did_summaries) {
+  outcomes <- did_outcomes()
+  tx_labels <- c(cit = "CIT", pit = "PIT")
+
+  plots <- purrr::map(names(outcomes), \(out_id) {
+    purrr::map(c("cit", "pit"), \(tx) {
+      bid <- paste(scope, tx, out_id, sep = "_")
+      p <- did_es_plot(bid, did_summaries, title_prefix = tx_labels[[tx]])
+      if (is.null(p)) p <- patchwork::plot_spacer()
+      p
+    })
+  }) |> purrr::list_c()
+
+  patchwork::wrap_plots(plots, ncol = 2)
+}
+
+# Forest plot: overall ATT by region and outcome, faceted by treatment
+plot_did_coef <- function(did_summaries) {
+  outcomes <- did_outcomes()
+  tx_labels <- c(cit = "CIT", pit = "PIT")
+
+  df <- did_summaries |>
+    filter(scope %in% c("EAP", "MIC", "HIC")) |>
+    mutate(
+      outcome_label = purrr::map_chr(outcome, \(o) outcomes[[o]]$label),
+      tx_label = tx_labels[tx],
+      lower = overall_att - 1.96 * overall_se,
+      upper = overall_att + 1.96 * overall_se
+    )
+
+  ggplot(df, aes(x = overall_att, y = outcome_label, color = scope)) +
+    geom_vline(xintercept = 0) +
+    geom_pointrange(aes(xmin = lower, xmax = upper),
+                    position = position_dodge(width = 0.5),
+                    size = 0.4,
+                    alpha = 0.6
+                    ) +
+    facet_wrap(~ tx_label) +
+    labs(x = "ATT", y = NULL, color = "Region") +
+    theme_minimal(base_size = 13) +
+    theme(legend.position = "bottom")
 }
 
 # Regional spaghetti: one line per region with ±1 SE ribbon
@@ -243,30 +288,33 @@ build_did_summary_table <- function(scope_prefix, did_summaries) {
       if (nrow(row) == 0) {
         return(list(att = NA_real_, se = NA_real_, n = NA_integer_))
       }
-      list(att = row$overall_att, se = row$overall_se, n = row$n)
+      list(att = row$overall_att, se = row$overall_se, n = row$n, wpval = row$wpval)
     }) |> setNames(names(outcomes))
 
     tibble(
-      ` ` = c(tx_labels[[tx]], "", ""),
-      row_type = c("att", "se", "n"),
+      ` ` = c(tx_labels[[tx]], "", "Observations", "Pre-trends p"),
+      row_type = c("att", "se", "n", "wpval"),
       !!!purrr::imap(cells, \(c, out_id) {
-        if (is.na(c$att)) return(rep("—", 3))
+        if (is.na(c$att)) return(rep("—", 4))
         c(sprintf("%.3f", c$att),
           sprintf("(%.3f)", c$se),
-          sprintf("N = %s", scales::comma(c$n)))
+          scales::comma(c$n),
+          sprintf("%.3f", c$wpval))
       })
     ) |>
       rename(!!!setNames(names(outcomes), purrr::map_chr(outcomes, "label")))
   })
 
   n_tx <- length(treatments)
-  n_rows_per_tx <- 3L
-  midrule_rows <- seq(n_rows_per_tx, (n_tx - 1) * n_rows_per_tx, by = n_rows_per_tx)
+  n_rows_per_tx <- 4L
+  panel_rows <- seq(n_rows_per_tx, (n_tx - 1) * n_rows_per_tx, by = n_rows_per_tx)
+  se_rows    <- seq(2L, n_tx * n_rows_per_tx, by = n_rows_per_tx)
 
   summary_rows |>
     select(-row_type) |>
     tt() |>
-    style_tt(i = midrule_rows, line = "b", line_color = "black")
+    style_tt(i = se_rows,    line = "b", line_color = "gray") |>
+    style_tt(i = panel_rows, line = "b", line_color = "black")
 }
 ```
 
@@ -281,6 +329,12 @@ Countries with multiple tax cut episodes: Take first episode as absorbing treatm
 - **Base period**: universal
 - **Covariates**: none (unconditional)
 - **Outcomes**: log-transformed (log investment, log employment)
+
+
+$$
+Y_{it}=\beta T_{it} + \alpha_i + \delta_t + \varepsilon_{it}
+$$
+
 
 ## Data
 
@@ -369,6 +423,42 @@ did_data_cit |>
     y = ""
   ) +
   theme(legend.position = "none")
+
+```
+
+
+```{r}
+#| label: tbl-summarys-stats
+#| tbl-cap: Summary statistics. Firm-level data. 2016.
+
+dict <- generate_dictionary(did_data_cit) |>
+  as_tibble() |>
+  select(
+    name = variable,
+    label
+  )
+
+did_data_cit |>
+  filter(year == max(year), !is.na(region)) |>
+  select(!c(ccode, country, year, firm_id, first_treated_year, treated, region, firm_id_num)) |>
+  select(!starts_with("t_")) |>
+  pivot_longer(everything()) |>
+  summarise(
+    .by = name,
+    N = sum(!is.na(value)),
+    Mean = mean(value, na.rm = T),
+    Median = median(value, na.rm = T),
+    `Std.Dev.` = sd(value, na.rm = T),
+    Min = min(value, na.rm = T),
+    Max = max(value, na.rm = T)
+  ) |>
+  left_join(dict) |>
+  select(-name) |>
+  select(Variable = label, everything()) |>
+  mutate(across(where(is.numeric), \(x) scales::number(x, big.mark = ",", accuracy = 1))) |>
+  tt() |>
+  style_tt(j = 1, align = "l") |>
+  style_tt(j = 2:7, align = "r")
 
 ```
 
@@ -557,68 +647,62 @@ At the whole world level, there is little to say about the causal effect of tax 
 
 ### Region level ATT
 
-::: {.panel-tabset}
-
-#### EAP
-
 ```{r}
-#| label: fig-did-eap-event-studies
-#| fig-height: 4
-#| layout-ncol: 2
+#| label: fig-did-regional-coef
+#| fig-cap: "Overall ATT by region and outcome"
+#| fig-height: 6
 
-for (out_id in names(did_outcomes())) {
-  for (tx in c("cit", "pit")) {
-    p <- did_es_plot(paste("EAP", tx, out_id, sep = "_"), did_summaries)
-    if (!is.null(p)) print(p)
-  }
-}
+plot_did_coef(did_summaries)
 ```
 
 ```{r}
-#| label: tbl-did-eap-summary
+#| label: fig-did-eap-es
+#| fig-cap: "East Asian Countries"
+#| fig-height: 36
+#| fig-width: 10
+
+build_region_es_panel("EAP", did_summaries)
+```
+
+```{r}
+#| label: fig-did-mic-es
+#| fig-cap: "Middle Income Countries"
+#| fig-height: 36
+#| fig-width: 10
+
+build_region_es_panel("MIC", did_summaries)
+```
+
+```{r}
+#| label: fig-did-hic-es
+#| fig-cap: "High Income Countries"
+#| fig-height: 36
+#| fig-width: 10
+
+build_region_es_panel("HIC", did_summaries)
+```
+
+::: {#tbl-region-att .column-body-outset}
+
+```{r}
+#| label: tbl-region-att-eap
+#| tbl-cap: "East Asian Countries"
 build_did_summary_table("EAP", did_summaries)
 ```
 
-#### MIC
-
 ```{r}
-#| label: fig-did-mic-event-studies
-#| fig-height: 4
-#| layout-ncol: 2
-
-for (out_id in names(did_outcomes())) {
-  for (tx in c("cit", "pit")) {
-    p <- did_es_plot(paste("MIC", tx, out_id, sep = "_"), did_summaries)
-    if (!is.null(p)) print(p)
-  }
-}
-```
-
-```{r}
-#| label: tbl-did-mic-summary
+#| label: tbl-region-att-mic
+#| tbl-cap: "Middle Income Countries"
 build_did_summary_table("MIC", did_summaries)
 ```
 
-#### HIC
-
 ```{r}
-#| label: fig-did-hic-event-studies
-#| fig-height: 4
-#| layout-ncol: 2
-
-for (out_id in names(did_outcomes())) {
-  for (tx in c("cit", "pit")) {
-    p <- did_es_plot(paste("HIC", tx, out_id, sep = "_"), did_summaries)
-    if (!is.null(p)) print(p)
-  }
-}
-```
-
-```{r}
-#| label: tbl-did-hic-summary
+#| label: tbl-region-att-hic
+#| tbl-cap: "High Income Countries"
 build_did_summary_table("HIC", did_summaries)
 ```
 
+Regional ATT estimates
 :::
 
 

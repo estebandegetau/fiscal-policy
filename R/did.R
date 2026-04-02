@@ -39,15 +39,15 @@ did_treatments <- function() {
 #' @return Named list of outcome specs (var, label, transform)
 did_outcomes <- function() {
   list(
-    investments          = list(var = "investments",          label = "log(Investment)",         transform = "log"),
-    employees            = list(var = "employees",            label = "log(Employment)",         transform = "log"),
-    revenues             = list(var = "revenues",             label = "log(Revenue)",            transform = "log"),
-    total_assets         = list(var = "total_assets",         label = "log(Total Assets)",       transform = "log"),
+    income_tax           = list(var = "income_tax",           label = "asinh(Income Tax Payable)", transform = "asinh"),
+    income_taxes         = list(var = "income_taxes",         label = "asinh(Income Taxes)",       transform = "asinh"),
+    social_expenditure   = list(var = "social_expenditure",   label = "log(Social Exp.)",          transform = "log"),
+    revenues             = list(var = "revenues",             label = "asinh(Revenue)",            transform = "asinh"),
+    employees            = list(var = "employees",            label = "log(Employment)",           transform = "log"),
+    investments          = list(var = "investments",          label = "asinh(Investment)",          transform = "asinh"),
     net_profit           = list(var = "net_profit",           label = "asinh(Net Profit)",       transform = "asinh"),
-    profit_per_employee  = list(var = "profit_per_employee",  label = "asinh(Profit/Employee)",  transform = "asinh"),
-    social_expenditure   = list(var = "social_expenditure",   label = "log(Social Exp.)",        transform = "log"),
-    income_tax           = list(var = "income_tax",           label = "log(Income Tax Payable)", transform = "log"),
-    income_taxes         = list(var = "income_taxes",         label = "log(Income Taxes)",       transform = "log")
+    total_assets         = list(var = "total_assets",         label = "log(Total Assets)",       transform = "log"),
+    profit_per_employee  = list(var = "profit_per_employee",  label = "asinh(Profit/Employee)",  transform = "asinh")
   )
 }
 
@@ -319,8 +319,8 @@ run_all_did_blocks <- function(did_data_list) {
 #'
 #' @param did_models Named list of att_gt objects (or NULL) from run_all_did_blocks()
 #' @return Tibble with columns: block_id, scope, tx, outcome, n,
-#'   overall_att, overall_se, event_study (list-col), event_study_crit_val,
-#'   group_att (list-col)
+#'   overall_att, overall_se, wpval, event_study (list-col),
+#'   event_study_crit_val, group_att (list-col)
 extract_did_summaries <- function(did_models) {
   did_models |>
     purrr::discard(is.null) |>
@@ -339,6 +339,7 @@ extract_did_summaries <- function(did_models) {
           n         = nrow(mod$DIDparams$data),
           overall_att = ov_agg$overall.att,
           overall_se  = ov_agg$overall.se,
+          wpval       = mod$Wpval,
           event_study = list(tibble::tibble(
             e   = es_agg$egt,
             att = es_agg$att.egt,
