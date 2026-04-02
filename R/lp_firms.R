@@ -84,9 +84,9 @@ get_lp_firm_spec <- function(block_id) {
 prepare_lp_firm_data <- function(orbis_merged) {
   outcomes    <- lp_firm_outcomes()
   treatments  <- lp_treatments()
-  outcome_vars <- purrr::map_chr(outcomes, "var")
-  tx_change_vars <- purrr::map_chr(treatments, "change_var")
-  tx_level_vars  <- purrr::map_chr(treatments, "level_var")
+  outcome_vars <- unname(purrr::map_chr(outcomes, "var"))
+  tx_change_vars <- unname(purrr::map_chr(treatments, "change_var"))
+  tx_level_vars  <- unname(purrr::map_chr(treatments, "level_var"))
 
   # Select needed columns early (memory optimisation)
   keep_cols <- c(
