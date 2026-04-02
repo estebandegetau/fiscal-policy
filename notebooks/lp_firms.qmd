@@ -1,0 +1,224 @@
+---
+title: "Firm-Level Local Projections"
+execute:
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| cache: false
+#| include: false
+
+rm(list = ls())
+gc()
+
+pacman::p_load(
+  targets,
+  tidyverse,
+  fixest,
+  tinytable,
+  here
+)
+
+here::i_am("notebooks/lp_firms.qmd")
+tar_config_set(store = here("_targets"))
+
+source(here("R/lp_firms.R"))
+source(here("R/local_projections.R"))
+
+theme_set(theme_minimal(base_size = 13))
+
+# Load targets
+lp_firm_cumulative <- tar_read(lp_firm_cumulative)
+lp_firm_plots      <- tar_read(lp_firm_plots)
+lp_firm_models     <- tar_read(lp_firm_models)
+
+# Outcome display labels (shared across CIT/PIT)
+outcome_labels <- c(
+  income_tax          = "Income Tax Payable",
+  income_taxes        = "Income Taxes",
+  social_expenditure  = "Social Exp.",
+  revenues            = "Revenue",
+  employees           = "Employment",
+  investments         = "Investment",
+  net_profit          = "Net Profit",
+  total_assets        = "Total Assets",
+  profit_per_employee = "Profit/Employee"
+)
+```
+
+```{r}
+#| label: helpers
+#| cache: false
+
+build_firm_summary_table <- function(tx_id, outcome_labels, lp_firm_cumulative, lp_firm_models) {
+  block_ids <- paste0(tx_id, "_", names(outcome_labels))
+
+  # h=5 cumulative effects for EAP
+  cum <- bind_rows(lp_firm_cumulative[block_ids], .id = "block") |>
+    filter(horizon == 5, group == "EAP") |>
+    mutate(across(c(coef, se), ~ .x * 100))
+
+  coef_row <- cum$coef |> sprintf(fmt = "%.3f")
+  se_row   <- cum$se   |> sprintf(fmt = "(%.3f)")
+
+  # Fit stats from H5 models
+  n_row   <- sapply(block_ids, \(b) fitstat(lp_firm_models[[b]]$H5, ~n)[[1]])
+  wr2_row <- sapply(block_ids, \(b) r2(lp_firm_models[[b]]$H5, "wr2")) |>
+    sprintf(fmt = "%.3f")
+
+  tbl_df <- data.frame(
+    ` ` = c("Coef (pp)", "", "N", "Within R\u00b2"),
+    rbind(coef_row, se_row, n_row, wr2_row),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  names(tbl_df) <- c(" ", unname(outcome_labels))
+
+  tt(tbl_df) |>
+    style_tt(i = 2, line = "b", line_color = "#d3d3d3")
+}
+```
+
+## Corporate Income Tax (CIT)
+
+::: {#fig-firm-cit layout-ncol=2}
+
+```{r}
+#| label: fig-firm-cit-income-tax
+#| fig-cap: "Income Tax Payable"
+lp_firm_plots$cit_income_tax
+```
+
+```{r}
+#| label: fig-firm-cit-income-taxes
+#| fig-cap: "Income Taxes"
+lp_firm_plots$cit_income_taxes
+```
+
+```{r}
+#| label: fig-firm-cit-social-expenditure
+#| fig-cap: "Social Expenditure"
+lp_firm_plots$cit_social_expenditure
+```
+
+```{r}
+#| label: fig-firm-cit-revenues
+#| fig-cap: "Revenue"
+lp_firm_plots$cit_revenues
+```
+
+```{r}
+#| label: fig-firm-cit-employees
+#| fig-cap: "Employment"
+lp_firm_plots$cit_employees
+```
+
+```{r}
+#| label: fig-firm-cit-investments
+#| fig-cap: "Investment"
+lp_firm_plots$cit_investments
+```
+
+```{r}
+#| label: fig-firm-cit-net-profit
+#| fig-cap: "Net Profit"
+lp_firm_plots$cit_net_profit
+```
+
+```{r}
+#| label: fig-firm-cit-total-assets
+#| fig-cap: "Total Assets"
+lp_firm_plots$cit_total_assets
+```
+
+```{r}
+#| label: fig-firm-cit-profit-per-employee
+#| fig-cap: "Profit per Employee"
+lp_firm_plots$cit_profit_per_employee
+```
+
+Cumulative effect of a 1 pp CIT cut on firm-level outcomes (EAP)
+:::
+
+## Personal Income Tax (PIT)
+
+::: {#fig-firm-pit layout-ncol=2}
+
+```{r}
+#| label: fig-firm-pit-income-tax
+#| fig-cap: "Income Tax Payable"
+lp_firm_plots$pit_income_tax
+```
+
+```{r}
+#| label: fig-firm-pit-income-taxes
+#| fig-cap: "Income Taxes"
+lp_firm_plots$pit_income_taxes
+```
+
+```{r}
+#| label: fig-firm-pit-social-expenditure
+#| fig-cap: "Social Expenditure"
+lp_firm_plots$pit_social_expenditure
+```
+
+```{r}
+#| label: fig-firm-pit-revenues
+#| fig-cap: "Revenue"
+lp_firm_plots$pit_revenues
+```
+
+```{r}
+#| label: fig-firm-pit-employees
+#| fig-cap: "Employment"
+lp_firm_plots$pit_employees
+```
+
+```{r}
+#| label: fig-firm-pit-investments
+#| fig-cap: "Investment"
+lp_firm_plots$pit_investments
+```
+
+```{r}
+#| label: fig-firm-pit-net-profit
+#| fig-cap: "Net Profit"
+lp_firm_plots$pit_net_profit
+```
+
+```{r}
+#| label: fig-firm-pit-total-assets
+#| fig-cap: "Total Assets"
+lp_firm_plots$pit_total_assets
+```
+
+```{r}
+#| label: fig-firm-pit-profit-per-employee
+#| fig-cap: "Profit per Employee"
+lp_firm_plots$pit_profit_per_employee
+```
+
+Cumulative effect of a 1 pp PIT cut on firm-level outcomes (EAP)
+:::
+
+## Summary
+
+::: {#tbl-firm-lp-5}
+
+```{r}
+#| label: tbl-firm-cit-summary
+#| tbl-cap: "Corporate Income Tax cuts"
+
+build_firm_summary_table("cit", outcome_labels, lp_firm_cumulative, lp_firm_models)
+```
+
+```{r}
+#| label: tbl-firm-pit-summary
+#| tbl-cap: "Personal Income Tax cuts"
+
+build_firm_summary_table("pit", outcome_labels, lp_firm_cumulative, lp_firm_models)
+```
+
+Cumulative effect of tax cuts on firm-level outcomes after 5 years (EAP)
+:::
