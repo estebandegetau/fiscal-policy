@@ -91,9 +91,15 @@ list(
     ),
 
   # Firm-level local projections (LP on orbis_merged, continuous treatment)
+  # Memory-efficient: run regressions and extract results in one pass
   tar_target(lp_firm_data, prepare_lp_firm_data(orbis_merged)),
-  tar_target(lp_firm_models, run_all_lp_firm_blocks(lp_firm_data)),
-  tar_target(lp_firm_cumulative, compute_all_cumulative_effects(lp_firm_models)),
+  tar_target(lp_firm_results, run_all_lp_firm_results(lp_firm_data)),
+  tar_target(lp_firm_cumulative, lp_firm_results$cumulative),
   tar_target(lp_firm_plots, plot_all_lp_firm_irfs(lp_firm_cumulative)),
-  tar_target(lp_firm_output, save_all_lp_firm_outputs(lp_firm_cumulative, lp_firm_plots))
+  tar_target(lp_firm_output, save_all_lp_firm_outputs(lp_firm_cumulative, lp_firm_plots)),
+  tar_quarto(
+    lp_firms,
+    "notebooks/lp_firms.qmd",
+    cache = FALSE
+  )
 )

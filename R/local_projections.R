@@ -24,8 +24,10 @@ lp_outcomes <- function() {
 #' @return Named list of treatment specs
 lp_treatments <- function() {
   list(
-    cit = list(change_var = "change_corporate_tr",  level_var = "corporate_tr",  lag_level = TRUE),
-    pit = list(change_var = "change_individual_tr", level_var = "individual_tr", lag_level = TRUE)
+    cit_cut  = list(change_var = "change_corporate_tr",   level_var = "corporate_tr",  lag_level = TRUE, direction = "cut"),
+    cit_hike = list(change_var = "change_corporate_tr2",  level_var = "corporate_tr",  lag_level = TRUE, direction = "hike"),
+    pit_cut  = list(change_var = "change_individual_tr",  level_var = "individual_tr", lag_level = TRUE, direction = "cut"),
+    pit_hike = list(change_var = "change_individual_tr2", level_var = "individual_tr", lag_level = TRUE, direction = "hike")
   )
 }
 
@@ -67,6 +69,7 @@ get_lp_spec <- function(block_id) {
     treatment_var   = tx$change_var,
     tax_level_var   = tx$level_var,
     lag_tax_level   = tx$lag_level,
+    direction       = tx$direction,
     outcome_raw_var = out$raw_var,
     outcome_is_log  = out$is_log,
     exclude_crisis  = TRUE,
@@ -149,9 +152,13 @@ prepare_block_data <- function(lp_data, block_id) {
       outcome_h3 = lead(outcome_growth, 3),
       outcome_h4 = lead(outcome_growth, 4),
       outcome_h5 = lead(outcome_growth, 5),
-      # Treatment: positive = tax cut (natural sign convention)
-      tax_cut = -.data[[spec$treatment_var]],
-      lag_tax_cut = lag(tax_cut),
+      # Treatment: always positive magnitude (cuts negated, hikes already positive)
+      tax_change = if (spec$direction == "cut") {
+        -.data[[spec$treatment_var]]
+      } else {
+        .data[[spec$treatment_var]]
+      },
+      lag_tax_change = lag(tax_change),
       # Tax level control
       tax_level = .data[[spec$tax_level_var]],
       lag_tax_level = lag(tax_level)
@@ -164,10 +171,10 @@ prepare_block_data <- function(lp_data, block_id) {
   if (spec$exclude_crisis) {
     df <- df |>
       mutate(
-        tax_cut = if_else(
+        tax_change = if_else(
           year %in% c(2008, 2009, 2020, 2021, 2022) |
             banking_crisis == 1 | currency_crisis == 1 | debt_crisis == 1,
-          0, tax_cut
+          0, tax_change
         )
       )
   }
@@ -192,12 +199,9 @@ run_lp_regressions <- function(block_data, block_id, horizons = 0:5) {
   models <- setNames(
     lapply(horizons, function(h) {
       outcome_var <- paste0("outcome_h", h)
-      # STATA: regife outcome_h`h' outcome_lag l1.real_gdp
-      #   c.change_corporate_tr##i.east_asia c.change_corporate_tr##i.hic
-      #   l1.corporate_tr, ife(ccode2 year, 1) vce(cluster ccode2)
       fml <- as.formula(paste0(
         outcome_var, " ~ outcome_lag + lag_real_gdp + ",
-        "tax_cut * east_asia + tax_cut * hic + ",
+        "tax_change * east_asia + tax_change * hic + ",
         tax_ctrl, " | ccode2 + year"
       ))
       fixest::feols(fml, data = block_data, vcov = ~ccode2)
@@ -218,7 +222,7 @@ run_lp_regressions <- function(block_data, block_id, horizons = 0:5) {
 #' @param model_list Named list of fixest models from run_lp_regressions()
 #' @param block_id Character string identifying the block
 #' @return Tibble with columns: horizon, group, coef, se, lower, upper
-compute_cumulative_effects <- function(model_list, block_id) {
+compute_cumulative_effects <- function(model_list, block_id, coef_prefix = "tax_change") {
   results <- tibble(
     horizon = integer(),
     group = character(),
@@ -240,11 +244,9 @@ compute_cumulative_effects <- function(model_list, block_id) {
     b <- coef(model)
     V <- vcov(model)
 
-    # Coefficient names in fixest for tax_cut * east_asia:
-    # "tax_cut", "east_asia", "tax_cut:east_asia", "hic", "tax_cut:hic"
-    i_main <- "tax_cut"
-    i_eap <- "tax_cut:east_asia"
-    i_hic <- "tax_cut:hic"
+    i_main <- coef_prefix
+    i_eap <- paste0(coef_prefix, ":east_asia")
+    i_hic <- paste0(coef_prefix, ":hic")
 
     if (!i_main %in% names(b)) next
 
@@ -320,7 +322,7 @@ plot_irf <- function(cumulative_effects, block_id, group = "EAP") {
     geom_hline(yintercept = 0, linetype = "dashed") +
     scale_x_continuous(breaks = 0:5) +
     labs(
-      x = "Years After Tax Cut",
+      x = paste0("Years After Tax ", if (spec$direction == "cut") "Cut" else "Hike"),
       y = paste0("Cumulative Effect on\n", spec$y_label, " (pp)")
     ) +
     theme_minimal(base_size = 13)

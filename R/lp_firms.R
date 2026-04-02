@@ -65,6 +65,7 @@ get_lp_firm_spec <- function(block_id) {
     treatment_var = tx$change_var,
     level_var     = tx$level_var,
     lag_level     = tx$lag_level,
+    direction     = tx$direction,
     outcome_var   = out$var,
     transform     = out$transform,
     y_label       = out$y_label,
@@ -89,13 +90,13 @@ prepare_lp_firm_data <- function(orbis_merged) {
   tx_level_vars  <- unname(purrr::map_chr(treatments, "level_var"))
 
   # Select needed columns early (memory optimisation)
-  keep_cols <- c(
+  keep_cols <- unique(c(
     "ccode", "country", "year", "firm_id",
     "group2", "incomelevel",
     tx_change_vars, tx_level_vars,
     "banking_crisis", "currency_crisis", "debt_crisis",
     outcome_vars
-  )
+  ))
 
   year_min <- 2006L
   year_max <- 2017L
@@ -160,8 +161,12 @@ prepare_lp_firm_block <- function(lp_firm_data, block_id) {
       outcome_h3     = lead(outcome_growth, 3),
       outcome_h4     = lead(outcome_growth, 4),
       outcome_h5     = lead(outcome_growth, 5),
-      # Treatment: positive = tax cut
-      tax_cut        = -.data[[spec$treatment_var]],
+      # Treatment: always positive magnitude (cuts negated, hikes already positive)
+      tax_change = if (spec$direction == "cut") {
+        -.data[[spec$treatment_var]]
+      } else {
+        .data[[spec$treatment_var]]
+      },
       # Tax level control (lagged)
       tax_level      = .data[[spec$level_var]],
       lag_tax_level  = lag(tax_level)
@@ -171,12 +176,12 @@ prepare_lp_firm_block <- function(lp_firm_data, block_id) {
   # Crisis exclusion: zero out treatment
   df |>
     mutate(
-      tax_cut = if_else(
+      tax_change = if_else(
         year %in% c(2008, 2009, 2020, 2021, 2022) |
           coalesce(banking_crisis, 0) == 1 |
           coalesce(currency_crisis, 0) == 1 |
           coalesce(debt_crisis, 0) == 1,
-        0, tax_cut
+        0, tax_change
       )
     )
 }
@@ -197,7 +202,7 @@ run_lp_firm_regressions <- function(block_data, block_id, horizons = 0:5) {
     lapply(horizons, function(h) {
       fml <- as.formula(paste0(
         "outcome_h", h,
-        " ~ outcome_lag + tax_cut * east_asia + tax_cut * hic + ",
+        " ~ outcome_lag + tax_change * east_asia + tax_change * hic + ",
         "lag_tax_level | firm_id_num + year"
       ))
       fixest::feols(fml, data = block_data, vcov = ~ccode)
@@ -227,7 +232,36 @@ plot_lp_firm_irf <- function(cumulative_effects, block_id, group = "EAP") {
     geom_hline(yintercept = 0, linetype = "dashed") +
     scale_x_continuous(breaks = 0:5) +
     labs(
-      x = "Years After Tax Cut",
+      x = paste0("Years After Tax ", if (spec$direction == "cut") "Cut" else "Hike"),
+      y = paste0("Cumulative Effect on\n", spec$y_label, " (pp)")
+    ) +
+    theme_minimal(base_size = 13)
+}
+
+
+#' Plot faceted IRF for a firm-level LP block (all regions)
+#'
+#' @param cumulative_effects Tibble from compute_cumulative_effects()
+#' @param block_id Character string identifying the block
+#' @return ggplot object with facets for EAP, MIC, HIC
+plot_lp_firm_irf_faceted <- function(cumulative_effects, block_id) {
+  spec <- get_lp_firm_spec(block_id)
+
+  plot_data <- cumulative_effects |>
+    mutate(
+      across(c(coef, lower, upper), ~ .x * 100),
+      group = factor(group, levels = c("EAP", "MIC", "HIC"))
+    )
+
+  ggplot(plot_data, aes(x = horizon)) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey85", alpha = 0.5) +
+    geom_line(aes(y = coef), linewidth = 0.8) +
+    geom_point(aes(y = coef), size = 2) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    scale_x_continuous(breaks = 0:5) +
+    facet_wrap(~group, ncol = 3) +
+    labs(
+      x = paste0("Years After Tax ", if (spec$direction == "cut") "Cut" else "Hike"),
       y = paste0("Cumulative Effect on\n", spec$y_label, " (pp)")
     ) +
     theme_minimal(base_size = 13)
@@ -239,7 +273,7 @@ plot_lp_firm_irf <- function(cumulative_effects, block_id, group = "EAP") {
 #' Run all firm-level LP blocks
 #'
 #' @param lp_firm_data Tibble from prepare_lp_firm_data()
-#' @param blocks Character vector of block IDs (default: all 18)
+#' @param blocks Character vector of block IDs (default: all)
 #' @return Named list of model lists, one per block
 run_all_lp_firm_blocks <- function(lp_firm_data, blocks = lp_firm_block_ids()) {
   blocks |>
@@ -248,6 +282,37 @@ run_all_lp_firm_blocks <- function(lp_firm_data, blocks = lp_firm_block_ids()) {
       block_data <- prepare_lp_firm_block(lp_firm_data, bid)
       run_lp_firm_regressions(block_data, bid)
     })
+}
+
+#' Run all firm-level LP blocks and extract results (memory-efficient)
+#'
+#' Runs regressions one block at a time, immediately extracts cumulative
+#' effects and summary stats, then discards the heavy model objects.
+#' Returns lightweight results only.
+#'
+#' @param lp_firm_data Tibble from prepare_lp_firm_data()
+#' @param blocks Character vector of block IDs (default: all)
+#' @return Named list with $cumulative (named list of tibbles) and
+#'   $summaries (named list with n and wr2 per block)
+run_all_lp_firm_results <- function(lp_firm_data, blocks = lp_firm_block_ids()) {
+  cumulative <- list()
+  summaries  <- list()
+
+  for (bid in blocks) {
+    block_data <- prepare_lp_firm_block(lp_firm_data, bid)
+    models     <- run_lp_firm_regressions(block_data, bid)
+
+    cumulative[[bid]] <- compute_cumulative_effects(models, bid)
+    summaries[[bid]]  <- list(
+      n   = fixest::fitstat(models$H5, ~n)[[1]],
+      wr2 = fixest::r2(models$H5, "wr2")
+    )
+
+    rm(block_data, models)
+    gc()
+  }
+
+  list(cumulative = cumulative, summaries = summaries)
 }
 
 #' Plot IRFs for all firm-level LP blocks

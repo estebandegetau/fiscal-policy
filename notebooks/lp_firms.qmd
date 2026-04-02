@@ -1,7 +1,7 @@
 ---
 title: "Firm-Level Local Projections"
 execute:
-  cache: false
+  cache: true
 ---
 
 ```{r}
@@ -23,15 +23,15 @@ pacman::p_load(
 here::i_am("notebooks/lp_firms.qmd")
 tar_config_set(store = here("_targets"))
 
-source(here("R/lp_firms.R"))
-source(here("R/local_projections.R"))
+tar_source(files = here("R"))
 
 theme_set(theme_minimal(base_size = 13))
+
 
 # Load targets
 lp_firm_cumulative <- tar_read(lp_firm_cumulative)
 lp_firm_plots      <- tar_read(lp_firm_plots)
-lp_firm_models     <- tar_read(lp_firm_models)
+lp_firm_summaries  <- tar_read(lp_firm_results)$summaries
 
 # Outcome display labels (shared across CIT/PIT)
 outcome_labels <- c(
@@ -51,7 +51,7 @@ outcome_labels <- c(
 #| label: helpers
 #| cache: false
 
-build_firm_summary_table <- function(tx_id, outcome_labels, lp_firm_cumulative, lp_firm_models) {
+build_firm_summary_table <- function(tx_id, outcome_labels, lp_firm_cumulative, lp_firm_summaries) {
   block_ids <- paste0(tx_id, "_", names(outcome_labels))
 
   # h=5 cumulative effects for EAP
@@ -62,9 +62,9 @@ build_firm_summary_table <- function(tx_id, outcome_labels, lp_firm_cumulative, 
   coef_row <- cum$coef |> sprintf(fmt = "%.3f")
   se_row   <- cum$se   |> sprintf(fmt = "(%.3f)")
 
-  # Fit stats from H5 models
-  n_row   <- sapply(block_ids, \(b) fitstat(lp_firm_models[[b]]$H5, ~n)[[1]])
-  wr2_row <- sapply(block_ids, \(b) r2(lp_firm_models[[b]]$H5, "wr2")) |>
+  # Fit stats from pre-extracted summaries
+  n_row   <- sapply(block_ids, \(b) lp_firm_summaries[[b]]$n)
+  wr2_row <- sapply(block_ids, \(b) lp_firm_summaries[[b]]$wr2) |>
     sprintf(fmt = "%.3f")
 
   tbl_df <- data.frame(
@@ -80,126 +80,248 @@ build_firm_summary_table <- function(tx_id, outcome_labels, lp_firm_cumulative, 
 }
 ```
 
-## Corporate Income Tax (CIT)
+## CIT Cuts
 
-::: {#fig-firm-cit layout-ncol=2}
+::: {#fig-firm-cit-cut layout-ncol=2}
 
 ```{r}
-#| label: fig-firm-cit-income-tax
+#| label: fig-firm-cit-cut-income-tax
 #| fig-cap: "Income Tax Payable"
-lp_firm_plots$cit_income_tax
+lp_firm_plots$cit_cut_income_tax
 ```
 
 ```{r}
-#| label: fig-firm-cit-income-taxes
+#| label: fig-firm-cit-cut-income-taxes
 #| fig-cap: "Income Taxes"
-lp_firm_plots$cit_income_taxes
+lp_firm_plots$cit_cut_income_taxes
 ```
 
 ```{r}
-#| label: fig-firm-cit-social-expenditure
+#| label: fig-firm-cit-cut-social-expenditure
 #| fig-cap: "Social Expenditure"
-lp_firm_plots$cit_social_expenditure
+lp_firm_plots$cit_cut_social_expenditure
 ```
 
 ```{r}
-#| label: fig-firm-cit-revenues
+#| label: fig-firm-cit-cut-revenues
 #| fig-cap: "Revenue"
-lp_firm_plots$cit_revenues
+lp_firm_plots$cit_cut_revenues
 ```
 
 ```{r}
-#| label: fig-firm-cit-employees
+#| label: fig-firm-cit-cut-employees
 #| fig-cap: "Employment"
-lp_firm_plots$cit_employees
+lp_firm_plots$cit_cut_employees
 ```
 
 ```{r}
-#| label: fig-firm-cit-investments
+#| label: fig-firm-cit-cut-investments
 #| fig-cap: "Investment"
-lp_firm_plots$cit_investments
+lp_firm_plots$cit_cut_investments
 ```
 
 ```{r}
-#| label: fig-firm-cit-net-profit
+#| label: fig-firm-cit-cut-net-profit
 #| fig-cap: "Net Profit"
-lp_firm_plots$cit_net_profit
+lp_firm_plots$cit_cut_net_profit
 ```
 
 ```{r}
-#| label: fig-firm-cit-total-assets
+#| label: fig-firm-cit-cut-total-assets
 #| fig-cap: "Total Assets"
-lp_firm_plots$cit_total_assets
+lp_firm_plots$cit_cut_total_assets
 ```
 
 ```{r}
-#| label: fig-firm-cit-profit-per-employee
+#| label: fig-firm-cit-cut-profit-per-employee
 #| fig-cap: "Profit per Employee"
-lp_firm_plots$cit_profit_per_employee
+lp_firm_plots$cit_cut_profit_per_employee
 ```
 
 Cumulative effect of a 1 pp CIT cut on firm-level outcomes (EAP)
 :::
 
-## Personal Income Tax (PIT)
+## CIT Hikes
 
-::: {#fig-firm-pit layout-ncol=2}
+::: {#fig-firm-cit-hike layout-ncol=2}
 
 ```{r}
-#| label: fig-firm-pit-income-tax
+#| label: fig-firm-cit-hike-income-tax
 #| fig-cap: "Income Tax Payable"
-lp_firm_plots$pit_income_tax
+lp_firm_plots$cit_hike_income_tax
 ```
 
 ```{r}
-#| label: fig-firm-pit-income-taxes
+#| label: fig-firm-cit-hike-income-taxes
 #| fig-cap: "Income Taxes"
-lp_firm_plots$pit_income_taxes
+lp_firm_plots$cit_hike_income_taxes
 ```
 
 ```{r}
-#| label: fig-firm-pit-social-expenditure
+#| label: fig-firm-cit-hike-social-expenditure
 #| fig-cap: "Social Expenditure"
-lp_firm_plots$pit_social_expenditure
+lp_firm_plots$cit_hike_social_expenditure
 ```
 
 ```{r}
-#| label: fig-firm-pit-revenues
+#| label: fig-firm-cit-hike-revenues
 #| fig-cap: "Revenue"
-lp_firm_plots$pit_revenues
+lp_firm_plots$cit_hike_revenues
 ```
 
 ```{r}
-#| label: fig-firm-pit-employees
+#| label: fig-firm-cit-hike-employees
 #| fig-cap: "Employment"
-lp_firm_plots$pit_employees
+lp_firm_plots$cit_hike_employees
 ```
 
 ```{r}
-#| label: fig-firm-pit-investments
+#| label: fig-firm-cit-hike-investments
 #| fig-cap: "Investment"
-lp_firm_plots$pit_investments
+lp_firm_plots$cit_hike_investments
 ```
 
 ```{r}
-#| label: fig-firm-pit-net-profit
+#| label: fig-firm-cit-hike-net-profit
 #| fig-cap: "Net Profit"
-lp_firm_plots$pit_net_profit
+lp_firm_plots$cit_hike_net_profit
 ```
 
 ```{r}
-#| label: fig-firm-pit-total-assets
+#| label: fig-firm-cit-hike-total-assets
 #| fig-cap: "Total Assets"
-lp_firm_plots$pit_total_assets
+lp_firm_plots$cit_hike_total_assets
 ```
 
 ```{r}
-#| label: fig-firm-pit-profit-per-employee
+#| label: fig-firm-cit-hike-profit-per-employee
 #| fig-cap: "Profit per Employee"
-lp_firm_plots$pit_profit_per_employee
+lp_firm_plots$cit_hike_profit_per_employee
+```
+
+Cumulative effect of a 1 pp CIT hike on firm-level outcomes (EAP)
+:::
+
+## PIT Cuts
+
+::: {#fig-firm-pit-cut layout-ncol=2}
+
+```{r}
+#| label: fig-firm-pit-cut-income-tax
+#| fig-cap: "Income Tax Payable"
+lp_firm_plots$pit_cut_income_tax
+```
+
+```{r}
+#| label: fig-firm-pit-cut-income-taxes
+#| fig-cap: "Income Taxes"
+lp_firm_plots$pit_cut_income_taxes
+```
+
+```{r}
+#| label: fig-firm-pit-cut-social-expenditure
+#| fig-cap: "Social Expenditure"
+lp_firm_plots$pit_cut_social_expenditure
+```
+
+```{r}
+#| label: fig-firm-pit-cut-revenues
+#| fig-cap: "Revenue"
+lp_firm_plots$pit_cut_revenues
+```
+
+```{r}
+#| label: fig-firm-pit-cut-employees
+#| fig-cap: "Employment"
+lp_firm_plots$pit_cut_employees
+```
+
+```{r}
+#| label: fig-firm-pit-cut-investments
+#| fig-cap: "Investment"
+lp_firm_plots$pit_cut_investments
+```
+
+```{r}
+#| label: fig-firm-pit-cut-net-profit
+#| fig-cap: "Net Profit"
+lp_firm_plots$pit_cut_net_profit
+```
+
+```{r}
+#| label: fig-firm-pit-cut-total-assets
+#| fig-cap: "Total Assets"
+lp_firm_plots$pit_cut_total_assets
+```
+
+```{r}
+#| label: fig-firm-pit-cut-profit-per-employee
+#| fig-cap: "Profit per Employee"
+lp_firm_plots$pit_cut_profit_per_employee
 ```
 
 Cumulative effect of a 1 pp PIT cut on firm-level outcomes (EAP)
+:::
+
+## PIT Hikes
+
+::: {#fig-firm-pit-hike layout-ncol=2}
+
+```{r}
+#| label: fig-firm-pit-hike-income-tax
+#| fig-cap: "Income Tax Payable"
+lp_firm_plots$pit_hike_income_tax
+```
+
+```{r}
+#| label: fig-firm-pit-hike-income-taxes
+#| fig-cap: "Income Taxes"
+lp_firm_plots$pit_hike_income_taxes
+```
+
+```{r}
+#| label: fig-firm-pit-hike-social-expenditure
+#| fig-cap: "Social Expenditure"
+lp_firm_plots$pit_hike_social_expenditure
+```
+
+```{r}
+#| label: fig-firm-pit-hike-revenues
+#| fig-cap: "Revenue"
+lp_firm_plots$pit_hike_revenues
+```
+
+```{r}
+#| label: fig-firm-pit-hike-employees
+#| fig-cap: "Employment"
+lp_firm_plots$pit_hike_employees
+```
+
+```{r}
+#| label: fig-firm-pit-hike-investments
+#| fig-cap: "Investment"
+lp_firm_plots$pit_hike_investments
+```
+
+```{r}
+#| label: fig-firm-pit-hike-net-profit
+#| fig-cap: "Net Profit"
+lp_firm_plots$pit_hike_net_profit
+```
+
+```{r}
+#| label: fig-firm-pit-hike-total-assets
+#| fig-cap: "Total Assets"
+lp_firm_plots$pit_hike_total_assets
+```
+
+```{r}
+#| label: fig-firm-pit-hike-profit-per-employee
+#| fig-cap: "Profit per Employee"
+lp_firm_plots$pit_hike_profit_per_employee
+```
+
+Cumulative effect of a 1 pp PIT hike on firm-level outcomes (EAP)
 :::
 
 ## Summary
@@ -207,18 +329,278 @@ Cumulative effect of a 1 pp PIT cut on firm-level outcomes (EAP)
 ::: {#tbl-firm-lp-5}
 
 ```{r}
-#| label: tbl-firm-cit-summary
-#| tbl-cap: "Corporate Income Tax cuts"
+#| label: tbl-firm-cit-cut-summary
+#| tbl-cap: "CIT Cuts"
 
-build_firm_summary_table("cit", outcome_labels, lp_firm_cumulative, lp_firm_models)
+build_firm_summary_table("cit_cut", outcome_labels, lp_firm_cumulative, lp_firm_summaries)
 ```
 
 ```{r}
-#| label: tbl-firm-pit-summary
-#| tbl-cap: "Personal Income Tax cuts"
+#| label: tbl-firm-cit-hike-summary
+#| tbl-cap: "CIT Hikes"
 
-build_firm_summary_table("pit", outcome_labels, lp_firm_cumulative, lp_firm_models)
+build_firm_summary_table("cit_hike", outcome_labels, lp_firm_cumulative, lp_firm_summaries)
 ```
 
-Cumulative effect of tax cuts on firm-level outcomes after 5 years (EAP)
+```{r}
+#| label: tbl-firm-pit-cut-summary
+#| tbl-cap: "PIT Cuts"
+
+build_firm_summary_table("pit_cut", outcome_labels, lp_firm_cumulative, lp_firm_summaries)
+```
+
+```{r}
+#| label: tbl-firm-pit-hike-summary
+#| tbl-cap: "PIT Hikes"
+
+build_firm_summary_table("pit_hike", outcome_labels, lp_firm_cumulative, lp_firm_summaries)
+```
+
+Cumulative effect of tax changes on firm-level outcomes after 5 years (EAP)
+:::
+
+## Regional Comparison
+
+### CIT Cuts
+
+::: {#fig-firm-cit-cut-regional layout-ncol=2}
+
+```{r}
+#| label: fig-firm-cit-cut-regional-income-tax
+#| fig-cap: "Income Tax Payable"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_income_tax, "cit_cut_income_tax")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-income-taxes
+#| fig-cap: "Income Taxes"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_income_taxes, "cit_cut_income_taxes")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-social-expenditure
+#| fig-cap: "Social Expenditure"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_social_expenditure, "cit_cut_social_expenditure")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-revenues
+#| fig-cap: "Revenue"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_revenues, "cit_cut_revenues")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-employees
+#| fig-cap: "Employment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_employees, "cit_cut_employees")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-investments
+#| fig-cap: "Investment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_investments, "cit_cut_investments")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-net-profit
+#| fig-cap: "Net Profit"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_net_profit, "cit_cut_net_profit")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-total-assets
+#| fig-cap: "Total Assets"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_total_assets, "cit_cut_total_assets")
+```
+
+```{r}
+#| label: fig-firm-cit-cut-regional-profit-per-employee
+#| fig-cap: "Profit per Employee"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_cut_profit_per_employee, "cit_cut_profit_per_employee")
+```
+
+Cumulative effect of a 1 pp CIT cut by region (EAP, MIC, HIC)
+:::
+
+### CIT Hikes
+
+::: {#fig-firm-cit-hike-regional layout-ncol=2}
+
+```{r}
+#| label: fig-firm-cit-hike-regional-income-tax
+#| fig-cap: "Income Tax Payable"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_income_tax, "cit_hike_income_tax")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-income-taxes
+#| fig-cap: "Income Taxes"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_income_taxes, "cit_hike_income_taxes")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-social-expenditure
+#| fig-cap: "Social Expenditure"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_social_expenditure, "cit_hike_social_expenditure")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-revenues
+#| fig-cap: "Revenue"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_revenues, "cit_hike_revenues")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-employees
+#| fig-cap: "Employment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_employees, "cit_hike_employees")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-investments
+#| fig-cap: "Investment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_investments, "cit_hike_investments")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-net-profit
+#| fig-cap: "Net Profit"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_net_profit, "cit_hike_net_profit")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-total-assets
+#| fig-cap: "Total Assets"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_total_assets, "cit_hike_total_assets")
+```
+
+```{r}
+#| label: fig-firm-cit-hike-regional-profit-per-employee
+#| fig-cap: "Profit per Employee"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$cit_hike_profit_per_employee, "cit_hike_profit_per_employee")
+```
+
+Cumulative effect of a 1 pp CIT hike by region (EAP, MIC, HIC)
+:::
+
+### PIT Cuts
+
+::: {#fig-firm-pit-cut-regional layout-ncol=2}
+
+```{r}
+#| label: fig-firm-pit-cut-regional-income-tax
+#| fig-cap: "Income Tax Payable"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_income_tax, "pit_cut_income_tax")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-income-taxes
+#| fig-cap: "Income Taxes"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_income_taxes, "pit_cut_income_taxes")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-social-expenditure
+#| fig-cap: "Social Expenditure"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_social_expenditure, "pit_cut_social_expenditure")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-revenues
+#| fig-cap: "Revenue"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_revenues, "pit_cut_revenues")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-employees
+#| fig-cap: "Employment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_employees, "pit_cut_employees")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-investments
+#| fig-cap: "Investment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_investments, "pit_cut_investments")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-net-profit
+#| fig-cap: "Net Profit"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_net_profit, "pit_cut_net_profit")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-total-assets
+#| fig-cap: "Total Assets"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_total_assets, "pit_cut_total_assets")
+```
+
+```{r}
+#| label: fig-firm-pit-cut-regional-profit-per-employee
+#| fig-cap: "Profit per Employee"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_cut_profit_per_employee, "pit_cut_profit_per_employee")
+```
+
+Cumulative effect of a 1 pp PIT cut by region (EAP, MIC, HIC)
+:::
+
+### PIT Hikes
+
+::: {#fig-firm-pit-hike-regional layout-ncol=2}
+
+```{r}
+#| label: fig-firm-pit-hike-regional-income-tax
+#| fig-cap: "Income Tax Payable"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_income_tax, "pit_hike_income_tax")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-income-taxes
+#| fig-cap: "Income Taxes"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_income_taxes, "pit_hike_income_taxes")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-social-expenditure
+#| fig-cap: "Social Expenditure"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_social_expenditure, "pit_hike_social_expenditure")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-revenues
+#| fig-cap: "Revenue"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_revenues, "pit_hike_revenues")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-employees
+#| fig-cap: "Employment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_employees, "pit_hike_employees")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-investments
+#| fig-cap: "Investment"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_investments, "pit_hike_investments")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-net-profit
+#| fig-cap: "Net Profit"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_net_profit, "pit_hike_net_profit")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-total-assets
+#| fig-cap: "Total Assets"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_total_assets, "pit_hike_total_assets")
+```
+
+```{r}
+#| label: fig-firm-pit-hike-regional-profit-per-employee
+#| fig-cap: "Profit per Employee"
+plot_lp_firm_irf_faceted(lp_firm_cumulative$pit_hike_profit_per_employee, "pit_hike_profit_per_employee")
+```
+
+Cumulative effect of a 1 pp PIT hike by region (EAP, MIC, HIC)
 :::

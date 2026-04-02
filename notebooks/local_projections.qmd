@@ -76,102 +76,200 @@ build_summary_table <- function(tx_id, outcome_labels, lp_cumulative, lp_models)
 }
 ```
 
-## Corporate Income Tax (CIT)
+## CIT Cuts
 
-::: {#fig-cit layout-ncol=2}
+::: {#fig-cit-cut layout-ncol=2}
 
 ```{r}
-#| label: fig-cit-gdppc
+#| label: fig-cit-cut-gdppc
 #| fig-cap: "GDP per capita"
-lp_plots$cit_gdppc
+lp_plots$cit_cut_gdppc
 ```
 
 ```{r}
-#| label: fig-cit-rev-tax
+#| label: fig-cit-cut-rev-tax
 #| fig-cap: "Tax revenue"
-lp_plots$cit_rev_tax
+lp_plots$cit_cut_rev_tax
 ```
 
 ```{r}
-#| label: fig-cit-tax-inc-prof-cp
+#| label: fig-cit-cut-tax-inc-prof-cp
 #| fig-cap: "Income tax revenue"
-lp_plots$cit_tax_inc_prof_cp
+lp_plots$cit_cut_tax_inc_prof_cp
 ```
 
 ```{r}
-#| label: fig-cit-tax-inc-prof-id
+#| label: fig-cit-cut-tax-inc-prof-id
 #| fig-cap: "Income tax (indiv.)"
-lp_plots$cit_tax_inc_prof_id
+lp_plots$cit_cut_tax_inc_prof_id
 ```
 
 ```{r}
-#| label: fig-cit-pvt-investment
+#| label: fig-cit-cut-pvt-investment
 #| fig-cap: "Private investment"
-lp_plots$cit_pvt_investment
+lp_plots$cit_cut_pvt_investment
 ```
 
 ```{r}
-#| label: fig-cit-fdi
+#| label: fig-cit-cut-fdi
 #| fig-cap: "FDI"
-lp_plots$cit_fdi
+lp_plots$cit_cut_fdi
 ```
 
 ```{r}
-#| label: fig-cit-consumption
+#| label: fig-cit-cut-consumption
 #| fig-cap: "Consumption"
-lp_plots$cit_consumption
+lp_plots$cit_cut_consumption
 ```
 
 Cumulative effect of a 1 pp CIT cut on selected outcomes (EAP)
 :::
 
-## Personal Income Tax (PIT)
+## CIT Hikes
 
-::: {#fig-pit layout-ncol=2}
+::: {#fig-cit-hike layout-ncol=2}
 
 ```{r}
-#| label: fig-pit-gdppc
+#| label: fig-cit-hike-gdppc
 #| fig-cap: "GDP per capita"
-lp_plots$pit_gdppc
+lp_plots$cit_hike_gdppc
 ```
 
 ```{r}
-#| label: fig-pit-rev-tax
+#| label: fig-cit-hike-rev-tax
 #| fig-cap: "Tax revenue"
-lp_plots$pit_rev_tax
+lp_plots$cit_hike_rev_tax
 ```
 
 ```{r}
-#| label: fig-pit-tax-inc-prof-cp
+#| label: fig-cit-hike-tax-inc-prof-cp
 #| fig-cap: "Income tax revenue"
-lp_plots$pit_tax_inc_prof_cp
+lp_plots$cit_hike_tax_inc_prof_cp
 ```
 
 ```{r}
-#| label: fig-pit-tax-inc-prof-id
+#| label: fig-cit-hike-tax-inc-prof-id
 #| fig-cap: "Income tax (indiv.)"
-lp_plots$pit_tax_inc_prof_id
+lp_plots$cit_hike_tax_inc_prof_id
 ```
 
 ```{r}
-#| label: fig-pit-pvt-investment
+#| label: fig-cit-hike-pvt-investment
 #| fig-cap: "Private investment"
-lp_plots$pit_pvt_investment
+lp_plots$cit_hike_pvt_investment
 ```
 
 ```{r}
-#| label: fig-pit-fdi
+#| label: fig-cit-hike-fdi
 #| fig-cap: "FDI"
-lp_plots$pit_fdi
+lp_plots$cit_hike_fdi
 ```
 
 ```{r}
-#| label: fig-pit-consumption
+#| label: fig-cit-hike-consumption
 #| fig-cap: "Consumption"
-lp_plots$pit_consumption
+lp_plots$cit_hike_consumption
+```
+
+Cumulative effect of a 1 pp CIT hike on selected outcomes (EAP)
+:::
+
+## PIT Cuts
+
+::: {#fig-pit-cut layout-ncol=2}
+
+```{r}
+#| label: fig-pit-cut-gdppc
+#| fig-cap: "GDP per capita"
+lp_plots$pit_cut_gdppc
+```
+
+```{r}
+#| label: fig-pit-cut-rev-tax
+#| fig-cap: "Tax revenue"
+lp_plots$pit_cut_rev_tax
+```
+
+```{r}
+#| label: fig-pit-cut-tax-inc-prof-cp
+#| fig-cap: "Income tax revenue"
+lp_plots$pit_cut_tax_inc_prof_cp
+```
+
+```{r}
+#| label: fig-pit-cut-tax-inc-prof-id
+#| fig-cap: "Income tax (indiv.)"
+lp_plots$pit_cut_tax_inc_prof_id
+```
+
+```{r}
+#| label: fig-pit-cut-pvt-investment
+#| fig-cap: "Private investment"
+lp_plots$pit_cut_pvt_investment
+```
+
+```{r}
+#| label: fig-pit-cut-fdi
+#| fig-cap: "FDI"
+lp_plots$pit_cut_fdi
+```
+
+```{r}
+#| label: fig-pit-cut-consumption
+#| fig-cap: "Consumption"
+lp_plots$pit_cut_consumption
 ```
 
 Cumulative effect of a 1 pp PIT cut on selected outcomes (EAP)
+:::
+
+## PIT Hikes
+
+::: {#fig-pit-hike layout-ncol=2}
+
+```{r}
+#| label: fig-pit-hike-gdppc
+#| fig-cap: "GDP per capita"
+lp_plots$pit_hike_gdppc
+```
+
+```{r}
+#| label: fig-pit-hike-rev-tax
+#| fig-cap: "Tax revenue"
+lp_plots$pit_hike_rev_tax
+```
+
+```{r}
+#| label: fig-pit-hike-tax-inc-prof-cp
+#| fig-cap: "Income tax revenue"
+lp_plots$pit_hike_tax_inc_prof_cp
+```
+
+```{r}
+#| label: fig-pit-hike-tax-inc-prof-id
+#| fig-cap: "Income tax (indiv.)"
+lp_plots$pit_hike_tax_inc_prof_id
+```
+
+```{r}
+#| label: fig-pit-hike-pvt-investment
+#| fig-cap: "Private investment"
+lp_plots$pit_hike_pvt_investment
+```
+
+```{r}
+#| label: fig-pit-hike-fdi
+#| fig-cap: "FDI"
+lp_plots$pit_hike_fdi
+```
+
+```{r}
+#| label: fig-pit-hike-consumption
+#| fig-cap: "Consumption"
+lp_plots$pit_hike_consumption
+```
+
+Cumulative effect of a 1 pp PIT hike on selected outcomes (EAP)
 :::
 
 ## Summary
@@ -179,26 +277,40 @@ Cumulative effect of a 1 pp PIT cut on selected outcomes (EAP)
 ::: {#tbl-lp-5}
 
 ```{r}
-#| label: tbl-cit-summary
-#| tbl-cap: "Corporate Income Tax cuts"
+#| label: tbl-cit-cut-summary
+#| tbl-cap: "CIT Cuts"
 
-build_summary_table("cit", outcome_labels, lp_cumulative, lp_models)
+build_summary_table("cit_cut", outcome_labels, lp_cumulative, lp_models)
 ```
 
 ```{r}
-#| label: tbl-pit-summary
-#| tbl-cap: "Personal Income Tax Cuts"
+#| label: tbl-cit-hike-summary
+#| tbl-cap: "CIT Hikes"
 
-build_summary_table("pit", outcome_labels, lp_cumulative, lp_models)
+build_summary_table("cit_hike", outcome_labels, lp_cumulative, lp_models)
 ```
 
-Cumulative effect of tax cuts after 5 years (EAP)
+```{r}
+#| label: tbl-pit-cut-summary
+#| tbl-cap: "PIT Cuts"
+
+build_summary_table("pit_cut", outcome_labels, lp_cumulative, lp_models)
+```
+
+```{r}
+#| label: tbl-pit-hike-summary
+#| tbl-cap: "PIT Hikes"
+
+build_summary_table("pit_hike", outcome_labels, lp_cumulative, lp_models)
+```
+
+Cumulative effect of tax changes after 5 years (EAP)
 :::
 
 
 @tbl-lp-5 shows very few statistically significant coefficients. Most importantly, "first stage" coefficients (tax revenue, income tax revenue, and individual income tax revenue) are highly insignificant.
 
-These results highlight the importance of using micro data to measure outcomes.
+These results highlight the importance of using micro data to measure outcomes. Cuts and hikes are estimated separately to allow for asymmetric effects.
 
 ---
 
@@ -209,7 +321,7 @@ These results highlight the importance of using micro data to measure outcomes.
 #| results: asis
 #| include: false
 
-tx_labels <- c(cit = "CIT", pit = "PIT")
+tx_labels <- c(cit_cut = "CIT Cut", cit_hike = "CIT Hike", pit_cut = "PIT Cut", pit_hike = "PIT Hike")
 
 for (tx_id in names(lp_treatments())) {
   for (out_id in names(lp_outcomes())) {
