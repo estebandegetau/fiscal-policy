@@ -1,0 +1,211 @@
+---
+title: "Data Provenance Audit: `Full_sample_filtered.dta` and Treatment Variable Construction"
+subtitle: "Decision record — dropping opaque upstream data in favor of documented sources"
+date: 2026-04-03
+date-format: long
+author:
+  - name: "Esteban Degetau"
+    affiliation: "World Bank"
+---
+
+## Summary
+
+An investigation into the construction of the treatment variables used throughout this project's macro local projections revealed two critical problems:
+
+1. **The treatment variables (`change_corporate_tr`, `change_individual_tr`, and their `*2` counterparts) are first-differences of observed tax rates, not statutory tax changes.** This makes them substantially more endogenous than previously assumed.
+2. **The dataset that contains them (`data/Full_sample_filtered.dta`) has no replication path.** The upstream code that produced it is missing, and forensic analysis of the files available in this repository shows the dataset was overwritten at some point, breaking any claim to reproducibility.
+
+This document records the evidence behind these findings and the decision to drop `Full_sample_filtered.dta` as a project input.
+
+## Background
+
+The macro local projections pipeline (Phase 1) estimates the causal effects of fiscal policy shocks on GDP, investment, employment, and other outcomes across South East Asian countries. The treatment variable in these regressions is `change_corporate_tr` (for corporate income tax) and `change_individual_tr` (for personal income tax), loaded from `data/Full_sample_filtered.dta`.
+
+Until this investigation, the working assumption — shared by both authors — was that these variables captured *statutory* tax changes: discrete legislative decisions to change the tax rate. Agustín Samano flagged that this assumption had never been verified against the data.
+
+## Finding 1: Two incompatible versions of the same file
+
+The repository contains two files named `Full_sample_filtered.dta`:
+
+| Property | `scott/code/stata/input/` | `data/` |
+|----------|--------------------------|---------|
+| Rows | 2,389 | 7,597 |
+| Columns | 75 | 273 |
+| MD5 hash | `125f9fc...` | `e5e76ff...` |
+| Has `change_*` columns | No | Yes |
+| Has `banking_crisis` etc. | No | Yes |
+
+```{r}
+#| label: compare-files
+#| code-fold: true
+#| code-summary: "Verify the two files differ"
+library(haven)
+library(dplyr)
+
+scott_file <- here::here("scott/code/stata/input/Full_sample_filtered.dta")
+data_file  <- here::here("data/Full_sample_filtered.dta")
+
+scott <- read_dta(scott_file)
+data  <- read_dta(data_file)
+
+tibble::tibble(
+  version = c("scott/", "data/"),
+  rows    = c(nrow(scott), nrow(data)),
+  cols    = c(ncol(scott), ncol(data)),
+  has_change_corporate_tr = c(
+    "change_corporate_tr" %in% names(scott),
+    "change_corporate_tr" %in% names(data)
+  )
+) |>
+  tinytable::tt(caption = "Comparison of the two Full_sample_filtered.dta files")
+```
+
+The `scott/` version is the original input used by the chapter's STATA replication code. The `data/` version is a downstream product of some unknown transformation pipeline that:
+
+- Expanded the sample from 2,389 to 7,597 rows
+- Added 198 new columns, including the `change_*` treatment variables
+- Was saved under the same filename, overwriting the original input
+
+No code in this repository produces the `data/` version from the `scott/` version. The STATA do-files in both `stata/` and `scott/code/stata/` load `Full_sample_filtered.dta` and immediately reference `change_corporate_tr` as if it already exists — meaning they were written to run on the `data/` version, not the `scott/` version.
+
+## Finding 2: `change_corporate_tr` is a first-difference, not a statutory change
+
+We reconstructed the variable empirically. The `data/` version of the file contains both the tax rate level (`corporate_tr`) and the treatment variables. The following test confirms that `change_corporate_tr` is derived mechanically from the first-difference of `corporate_tr`, split by sign:
+
+```{r}
+#| label: reconstruct-treatment
+#| code-fold: true
+#| code-summary: "Reconstruct change_corporate_tr from first-differences"
+df <- read_dta(data_file)
+
+test <- df |>
+  arrange(ccode2, year) |>
+  group_by(ccode2) |>
+  mutate(fd = corporate_tr - lag(corporate_tr)) |>
+  ungroup() |>
+  filter(!is.na(fd), !is.na(change_corporate_tr))
+
+cuts    <- test |> filter(fd < 0)
+hikes   <- test |> filter(fd > 0)
+no_chg  <- test |> filter(fd == 0)
+
+tibble::tibble(
+  test = c(
+    "fd < 0 implies change_corporate_tr == fd (cuts)",
+    "fd > 0 implies change_corporate_tr == 0 (hikes zeroed out)",
+    "fd == 0 implies change_corporate_tr == 0"
+  ),
+  n_obs = c(nrow(cuts), nrow(hikes), nrow(no_chg)),
+  all_pass = c(
+    all(abs(cuts$fd - cuts$change_corporate_tr) < 1e-6),
+    all(hikes$change_corporate_tr == 0),
+    all(no_chg$change_corporate_tr == 0)
+  )
+) |>
+  tinytable::tt(caption = "Verification: change_corporate_tr is the negative part of the first-difference")
+```
+
+And the mirror image for `change_corporate_tr2`:
+
+```{r}
+#| label: reconstruct-treatment2
+#| code-fold: true
+#| code-summary: "Reconstruct change_corporate_tr2 (hikes only)"
+test2 <- df |>
+  arrange(ccode2, year) |>
+  group_by(ccode2) |>
+  mutate(fd = corporate_tr - lag(corporate_tr)) |>
+  ungroup() |>
+  filter(!is.na(fd), !is.na(change_corporate_tr2))
+
+cuts2  <- test2 |> dplyr::filter(fd < 0)
+hikes2 <- test2 |> dplyr::filter(fd > 0)
+zeros2 <- test2 |> dplyr::filter(fd == 0)
+
+tibble::tibble(
+  test = c(
+    "fd < 0 (cuts) implies change_corporate_tr2 == 0",
+    "fd > 0 (hikes) implies change_corporate_tr2 == fd",
+    "fd == 0 implies change_corporate_tr2 == 0"
+  ),
+  n_obs = c(nrow(cuts2), nrow(hikes2), nrow(zeros2)),
+  all_pass = c(
+    all(cuts2$change_corporate_tr2 == 0),
+    all(abs(hikes2$change_corporate_tr2 - hikes2$fd) < 1e-6),
+    all(zeros2$change_corporate_tr2 == 0)
+  )
+) |>
+  tinytable::tt(caption = "Verification: change_corporate_tr2 is the positive part of the first-difference")
+```
+
+In summary, the construction is:
+
+$$
+\texttt{change\_corporate\_tr}_t = \min\!\bigl(\texttt{corporate\_tr}_t - \texttt{corporate\_tr}_{t-1},\; 0\bigr)
+$$
+
+$$
+\texttt{change\_corporate\_tr2}_t = \max\!\bigl(\texttt{corporate\_tr}_t - \texttt{corporate\_tr}_{t-1},\; 0\bigr)
+$$
+
+The same logic applies to `change_individual_tr` / `change_individual_tr2` (PIT) and `change_vat_tr` / `change_vat_tr2` (VAT).
+
+## Finding 3: These variables are not suitable as treatments for causal analysis
+
+The variable `corporate_tr` in the dataset is the *observed* corporate tax rate — a macro aggregate. Its first-difference captures *any* year-over-year change in this rate, regardless of the cause. This includes:
+
+- **Statutory changes**: A government passes a law changing the corporate tax rate. This is a policy action and is arguably exogenous to current economic conditions (especially under the narrative identification framework of Romer & Romer 2010).
+- **Compositional shifts**: Even without a law change, the effective/average corporate tax rate can shift because the composition of the tax base changes — e.g., more profitable firms (taxed at higher brackets) enter or exit the economy, or tax compliance varies with the business cycle.
+- **Mechanical responses**: Tax revenues (and effective rates) move with GDP. During booms, more firms hit higher brackets; during recessions, losses reduce the effective rate. These movements are *caused by* the very outcomes we are trying to estimate effects on.
+
+Using the first-difference of the observed rate as a treatment variable creates a classic endogeneity problem: the "treatment" is partly a function of the outcome. This violates the identifying assumption of local projections and renders the estimated impulse responses difficult to interpret causally.
+
+Statutory tax changes — changes in the *law* rather than the *macro variable* — are substantially cleaner. They represent discrete policy decisions and are the standard treatment in the fiscal multiplier literature (Romer & Romer 2010; Mertens & Ravn 2013). Agustín Samano has identified two available data sources of statutory tax changes that cover South East Asia. These are the appropriate treatment variables for this project.
+
+## Decision: Drop `Full_sample_filtered.dta`
+
+We will stop using `data/Full_sample_filtered.dta` as a project input. The reasons are:
+
+1. **No replication path.** The code that produced the `data/` version from raw sources is not available in this repository or any known location. We cannot verify how the 273 columns were constructed, whether the sample was filtered correctly, or whether other transformations were applied.
+
+2. **Overwritten input.** The `scott/` directory contains the original 75-column version. The `data/` version has the same filename but is a fundamentally different dataset (3× the rows, 4× the columns). At some point in the project's history, the original input was replaced by a downstream product. Overwriting input data with derived data is a cardinal reproducibility failure — it makes it impossible to distinguish raw data from processed data, and any re-run of the original code would produce different results depending on which version is present.
+
+3. **Wrong treatment variable.** Even if the data were perfectly documented and reproducible, the treatment variables it contains are not suitable for causal analysis. They capture observed rate changes, not statutory policy shocks.
+
+## Path forward
+
+### 1. Statutory tax change data (treatment variables)
+
+Agustín has identified two data sources of statutory tax changes covering our countries and time period. Once obtained, these replace `change_corporate_tr` and friends as the treatment variables in the local projections pipeline. The pipeline code (`R/local_projections.R`) is treatment-agnostic — `lp_treatments()` simply points at column names, so the mechanical changes are modest. The conceptual change is significant: we move from an endogenous macro variable to a cleaner policy shock measure.
+
+### 2. Orbis firm data (outcome variables for Phase 2)
+
+The firm-level data from Orbis (`data/firm_data.zip`, provided by Yu Cao) is the outcome data for Phase 2 micro analysis. During recent work, we were unable to clearly distinguish between the variables "Income tax payable" and "Income taxes" — a distinction that could matter for interpreting firm-level tax burden responses. We do not have the original BvD/Orbis codebook or Yu Cao's cleaning code.
+
+**Action item**: Email Yu Cao requesting:
+
+- The original BvD/Orbis variable codebook (mapping BvD codes to the variable names in the delivered dataset)
+- Her data cleaning and construction code (what was dropped, imputed, transformed)
+- Clarification on the distinction between "Income tax payable" and "Income taxes" and any other variables with ambiguous names
+
+This is urgent: Phase 2 results cannot be credibly defended without understanding the outcome variable construction.
+
+### 3. Macro control variables
+
+The `Full_sample_filtered.dta` also supplied macro control variables used in the regressions (GDP, crisis indicators, income classifications, etc.). These will need to be sourced from documented, publicly available datasets:
+
+- **GDP and macro aggregates**: World Economic Outlook (WEO) data, already partially available in `scott/code/stata/input/`
+- **Crisis indicators**: Laeven & Valencia banking/currency/debt crisis database
+- **Country classifications**: World Bank income/region classifications
+
+Building these from documented sources, with all transformations tracked in `_targets.R`, restores full reproducibility.
+
+### 4. Revised pipeline architecture
+
+The rebuilt data layer would have three documented raw inputs:
+
+1. **Statutory tax changes** (from Agustín's two sources) → treatment variables
+2. **Orbis firm data** (from Yu Cao, with codebook) → firm-level outcomes
+3. **WEO + crisis + classification data** (public sources) → macro outcomes and controls
+
+All transformations from these inputs to analysis-ready datasets would be defined in `R/` functions and tracked by `_targets.R`. No opaque `.dta` files. No unsigned intermediate datasets.

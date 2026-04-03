@@ -27,6 +27,9 @@ website:
     contents:
       - index.qmd
       - contents: docs/
+      - section: "Decisions"
+        contents:
+          - docs/decisions/data_challenges.qmd
       - section: "Data Foundation"
         contents:
           - notebooks/explore_orbis.qmd
@@ -34,6 +37,7 @@ website:
         contents:
           - notebooks/local_projections.qmd
           - notebooks/did.qmd
+          - notebooks/lp_firms.qmd
 
 title-block-banner: true
 lightbox: true
