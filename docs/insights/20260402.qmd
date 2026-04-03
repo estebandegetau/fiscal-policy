@@ -1,0 +1,276 @@
+---
+title: "Claude Code Insights"
+subtitle: "177 messages across 30 sessions | 2026-03-17 to 2026-04-02"
+date: 2026-04-02
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+---
+
+```{r}
+#| include: false
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(patchwork)
+
+theme_set(
+  theme_minimal(base_size = 13) +
+    theme(
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(face = "bold", size = 14),
+      plot.subtitle = element_text(color = "grey50")
+    )
+)
+```
+
+## At a Glance
+
+| Metric | Value |
+|--------|-------|
+| Messages | 177 |
+| Lines changed | +6,187 / -1,000 |
+| Files touched | 68 |
+| Active days | 11 |
+| Messages/day | 16.1 |
+| Sessions analyzed | 30 (of 39 total) |
+| Hours | 103 |
+| Commits | 9 |
+
+**What's working:** A strong plan-first instinct that pays off --- regularly interrupting Claude when it jumps to coding and insisting on a written plan leads to cleaner multi-file implementations across the targets pipelines. Impressive feats include translating an entire Stata LP pipeline into R in one session and iteratively building publication-quality DiD visualizations through persistent collaborative steering.
+
+**What's hindering:** Claude repeatedly jumps into implementation before planning, suggests non-existent functions (like `knitr::fig_cap()`), and reasons incorrectly about things it should just test --- like which variable labels survive a pipeline. Claude often hits avoidable walls (OOM crashes, infeasible estimations, Quarto layout failures) that could be caught earlier by checking data dimensions, memory constraints, or treatment variation before running heavy compute.
+
+**Quick wins:** Create a custom slash command (`/plan`) that enforces plan-first behavior. Set up a pre-commit hook to auto-run basic checks (rendering a Quarto doc or validating targets) so issues surface before committing.
+
+**Ambitious workflows:** Hand off entire estimation pipelines --- Claude could autonomously run targets, catch OOM or segfault failures, diagnose and fix them, and re-run until everything succeeds. Stata-to-R translation could also become fully autonomous, with an agent reading `.do` files, generating R equivalents, and validating that estimates match within tolerance.
+
+## What I Work On
+
+```{r}
+#| label: fig-project-areas
+#| fig-cap: "Sessions by project area"
+#| fig-height: 3.5
+
+tibble(
+  area = c(
+    "DiD Analysis Pipeline",
+    "Quarto Visualization",
+    "Local Projections (LP)",
+    "Git Ops & Project Mgmt",
+    "Data Pipeline & EDA"
+  ),
+  sessions = c(10, 7, 6, 4, 3)
+) |>
+  mutate(area = reorder(area, sessions)) |>
+  ggplot(aes(sessions, area)) +
+  geom_col(fill = "#2563eb", width = 0.6) +
+  geom_text(aes(label = sessions), hjust = -0.3, size = 3.5) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = "Sessions", y = NULL, title = "Sessions by Project Area")
+```
+
+- **Difference-in-Differences Analysis Pipeline** (~10 sessions): Built and iteratively refined a full DiD pipeline in R using targets, including regional/country subsetting, event studies, pre-trends testing, and treatment summary visualizations. Debugged OOM and segfault crashes and handled estimation edge cases like lack of within-country treatment variation.
+
+- **Quarto Notebook Visualization & Formatting** (~7 sessions): Extensive iterative refinement of layouts including regional comparison plots, forest plots, spaghetti plots, stacked bar charts, and styled summary statistics tables. Switched table rendering from gt/etable to modelsummary.
+
+- **Local Projections --- Firm & Macro Level** (~6 sessions): Translated Stata LP regressions into R within a targets pipeline, designed firm-level LP econometrics, and refactored regression specifications to reduce target proliferation. Implemented 41 targets and refined coefficient interpretation and presentation.
+
+- **Git Operations & Project Management** (~4 sessions): Git history rewriting to remove large files, commit reviews, force-pushes, hard resets, and project onboarding with CLAUDE.md generation. Integration plans and doc-sync workflows.
+
+- **Data Pipeline & EDA Setup** (~3 sessions): Data ingestion pipelines and EDA notebooks, adapting plans when actual datasets differed from expectations.
+
+## How I Use Claude Code
+
+```{r}
+#| label: fig-usage-panels
+#| fig-cap: "Usage breakdown: goals, tools, languages, and session types"
+#| fig-height: 7
+#| fig-width: 9
+
+p_goals <- tibble(
+  category = c("Code Editing", "Planning", "Planning Discussion",
+                "Git Operations", "Code Implementation", "Git Commits"),
+  count = c(9, 9, 9, 5, 5, 5)
+) |>
+  mutate(category = reorder(category, count)) |>
+  ggplot(aes(count, category)) +
+  geom_col(fill = "#2563eb", width = 0.6) +
+  geom_text(aes(label = count), hjust = -0.3, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = NULL, y = NULL, title = "What I Wanted")
+
+p_tools <- tibble(
+  tool = c("Bash", "Read", "Edit", "Write", "Grep", "TodoWrite"),
+  count = c(204, 192, 156, 39, 37, 32)
+) |>
+  mutate(tool = reorder(tool, count)) |>
+  ggplot(aes(count, tool)) +
+  geom_col(fill = "#0891b2", width = 0.6) +
+  geom_text(aes(label = count), hjust = -0.3, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = NULL, y = NULL, title = "Top Tools Used")
+
+p_langs <- tibble(
+  language = c("Markdown", "HTML", "YAML"),
+  count = c(71, 3, 3)
+) |>
+  mutate(language = reorder(language, count)) |>
+  ggplot(aes(count, language)) +
+  geom_col(fill = "#10b981", width = 0.6) +
+  geom_text(aes(label = count), hjust = -0.3, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = NULL, y = NULL, title = "Languages")
+
+p_sessions <- tibble(
+  type = c("Iterative Refinement", "Single Task", "Multi Task", "Exploration"),
+  count = c(16, 8, 4, 2)
+) |>
+  mutate(type = reorder(type, count)) |>
+  ggplot(aes(count, type)) +
+  geom_col(fill = "#8b5cf6", width = 0.6) +
+  geom_text(aes(label = count), hjust = -0.3, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = NULL, y = NULL, title = "Session Types")
+
+(p_goals + p_tools) / (p_langs + p_sessions)
+```
+
+**Interaction style:** Methodical, planning-oriented researcher using Claude Code as a full-stack research assistant. Nearly a third of sessions involve explicit planning or design conversations before implementation. Heavy use of TodoWrite (32 uses) to structure work. When Claude jumps ahead to implementation, I interrupt and redirect.
+
+Once past planning, I iterate intensively on visualization and presentation details --- figure layouts, table formatting, plot aesthetics, and Quarto rendering. Comfortable letting Claude run through multi-file changes (14 successful multi-file edits) and complex pipeline work, but actively course-correct when Claude takes a wrong approach (10 instances).
+
+**Key pattern:** Long, autonomous sessions with sparse but high-signal prompts --- roughly 6 messages per session, letting Claude do extensive tool work (600+ tool calls) between interventions. 90% of sessions achieved goals fully or mostly.
+
+## Impressive Things
+
+1. **Full Stata-to-R Pipeline Translation**: Translated an entire local projection regression pipeline from Stata into R within an existing targets framework, delivering all 41 targets in a single session.
+
+2. **Iterative Research Visualization Refinement**: Consistently iterated on publication-quality figures --- forest plots, event studies, spaghetti plots, stacked bar charts --- working through Quarto layout quirks and rendering issues until the output matched the vision.
+
+3. **Structured Planning Before Implementation**: Frequently interrupted Claude when it jumped straight into coding, insisting on planning first --- and planning sessions consistently led to better outcomes. 9 sessions dedicated to planning and discussion.
+
+```{r}
+#| label: fig-outcomes
+#| fig-cap: "What helped most and session outcomes"
+#| fig-height: 3.5
+#| fig-width: 9
+
+p_helped <- tibble(
+  capability = c("Multi-file Changes", "Good Explanations",
+                  "Correct Code Edits", "Good Debugging",
+                  "Fast/Accurate Search"),
+  count = c(14, 7, 6, 2, 1)
+) |>
+  mutate(capability = reorder(capability, count)) |>
+  ggplot(aes(count, capability)) +
+  geom_col(fill = "#16a34a", width = 0.6) +
+  geom_text(aes(label = count), hjust = -0.3, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = NULL, y = NULL, title = "What Helped Most")
+
+p_outcomes <- tibble(
+  outcome = c("Fully Achieved", "Mostly Achieved",
+               "Partially Achieved", "Not Achieved"),
+  count = c(15, 12, 2, 1)
+) |>
+  mutate(outcome = factor(outcome, levels = rev(outcome))) |>
+  ggplot(aes(count, outcome)) +
+  geom_col(fill = "#8b5cf6", width = 0.6) +
+  geom_text(aes(label = count), hjust = -0.3, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = NULL, y = NULL, title = "Outcomes")
+
+p_helped + p_outcomes
+```
+
+## Where Things Go Wrong
+
+```{r}
+#| label: fig-friction
+#| fig-cap: "Primary friction types across sessions"
+#| fig-height: 3
+
+tibble(
+  friction = c("Wrong Approach", "Buggy Code", "API Error",
+               "User Rejected Action", "Missing Dependency", "API Auth Error"),
+  count = c(10, 8, 3, 2, 1, 1)
+) |>
+  mutate(friction = reorder(friction, count)) |>
+  ggplot(aes(count, friction)) +
+  geom_col(fill = "#dc2626", width = 0.6) +
+  geom_text(aes(label = count), hjust = -0.3, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(x = "Instances", y = NULL, title = "Primary Friction Types")
+```
+
+### Premature Implementation Without Planning
+
+Frequently had to interrupt Claude because it started coding before forming a plan, leading to bugs and wasted iterations.
+
+- Claude started implementing firm-level LP adaptations before planning, producing a duplicate names bug from `purrr::map_chr` that required a fix commit
+- Claude tried to edit pipeline code before planning when threading country names through the pipeline, leading to a column name collision with `macro_data` that could have been caught in design
+
+### Trial-and-Error with Quarto/R Rendering
+
+Multiple iterations discovering that Quarto layout mechanics don't work as Claude assumed, with non-existent functions suggested and layout strategies that failed at render time.
+
+- Claude suggested non-existent `knitr::fig_cap()` and a `knit_child` approach for figure captions before being steered toward the working patchwork solution
+- Two separate sessions hit the same issue where `layout-ncol=3` in a single chunk didn't render properly because Quarto distributes columns across chunks, not loop outputs
+
+### Resource and Feasibility Failures During Estimation
+
+OOM crashes, segfaults, and infeasible estimations that burned significant compute time.
+
+- Phase 2 DiD pipeline hit OOM from loading too many columns, segfaults from unbalanced panels with fastglm/DRDID, and NA propagation issues --- all discovered only at runtime
+- Country-level DiD estimations were added to the spec grid but all failed due to lack of within-country treatment variation, requiring the entire feature to be removed
+
+## Suggestions
+
+### CLAUDE.md Additions
+
+These additions would reduce recurring friction:
+
+1. **Plan-first enforcement**: "Always make a plan before implementing. Never start writing code without first outlining the approach and getting user approval."
+
+2. **Empirical verification**: "When unsure whether something works (e.g., variable labels surviving a pipeline, Quarto layout mechanics, R function behavior), run the code to check empirically rather than reasoning about it."
+
+3. **Project stack encoding**: "Key packages: fixest, did, modelsummary, patchwork, tinytable (`tt()`). Use `modelsummary()`/`tt()` for tables, NOT gt or `etable()`."
+
+4. **Memory consciousness**: "Be memory-conscious with R estimation pipelines. Avoid loading all columns when only a subset is needed. For large spec grids, compute cumulative effects inline rather than storing all model objects."
+
+5. **Quarto figure layouts**: "Use subfigure divs (`::: {#fig-x layout-ncol=N}`) wrapping individual named chunks. Do NOT rely on `layout-ncol` within a single chunk containing loop output."
+
+### Features to Try
+
+- **Custom Skills**: Reusable prompt workflows triggered by a single `/command`. A `/render` skill could run targets then quarto render with error handling.
+- **Hooks**: Auto-run shell commands at lifecycle events. A pre-commit hook could check for large files and validate `.gitignore` coverage.
+- **Task Agents**: Spawn focused sub-agents for exploration. Deliberate sub-agents to explore data structure or existing code before planning would reduce wrong-approach friction.
+
+### Usage Patterns
+
+1. **Plan-First Enforcement**: Start complex sessions by explicitly asking for a plan before any code. Planning-heavy sessions tend to succeed.
+
+2. **Empirical Verification Over Reasoning**: Ask Claude to test assumptions with quick code snippets instead of guessing. Write a minimal test before committing to an approach.
+
+3. **Batch Git Operations**: End implementation sessions with a commit step rather than doing separate sessions. Keeps context fresh and avoids re-explaining what changed.
+
+## On the Horizon
+
+### Autonomous Test-and-Fix Estimation Pipelines
+
+Repeated cycles of OOM crashes, segfaults, and NA propagation during DiD and LP estimation consumed hours of back-and-forth. An autonomous agent could run the targets pipeline, catch failures, diagnose memory/data issues, apply fixes, and re-run until all targets succeed.
+
+### Parallel Agents for Quarto Rendering
+
+Multiple sessions were spent iterating on Quarto layout mechanics. A multi-agent workflow could spin up parallel attempts at different layout strategies, render each, and present the one that works --- collapsing hours of trial-and-error into minutes.
+
+### Automated Stata-to-R Translation with Validation
+
+The 41-target LP translation was a single large session requiring manual oversight. Future translations could be fully autonomous --- an agent reads `.do` files, generates R equivalents, runs both pipelines on sample data, and validates that coefficient estimates match within tolerance.
+
+---
+
+*Report generated 2026-04-02 from Claude Code usage analytics.*

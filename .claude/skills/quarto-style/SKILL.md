@@ -119,7 +119,7 @@ modelsummary(
 
 ## Plots
 
-Set the global theme once in the setup chunk via `set_theme(theme_minimal())`. Individual plots should **not** add `+ theme_minimal()`.
+Set the global theme once in the setup chunk via `theme_set(theme_minimal())`. Individual plots should **not** add `+ theme_minimal()`.
 
 ```r
 #| label: fig-descriptive-name
@@ -139,6 +139,56 @@ ggplot(data, aes(x, y)) +
 - Always provide axis labels via `labs()`
 - `theme_minimal()` is set globally in setup; do not repeat per plot
 - Use `scales::comma`, `scales::percent`, `scales::dollar_format()` for axis formatting
+
+## Figures: Multi-Panel and Subfigures
+
+### Quarto-native subfigures
+
+For multi-panel figures where each panel is a separate named plot, use Quarto's subfigure div syntax:
+
+````markdown
+::: {#fig-results layout-ncol=2}
+
+```{r}
+#| label: fig-results-gdp
+#| fig-cap: "GDP response"
+
+plot_gdp
+```
+
+```{r}
+#| label: fig-results-inv
+#| fig-cap: "Investment response"
+
+plot_inv
+```
+
+Main caption for the composite figure.
+:::
+````
+
+Each sub-chunk gets its own `fig-cap` (used as the subcaption) and the div closing text becomes the main caption. Cross-reference the composite with `@fig-results` or individual panels with `@fig-results-gdp`.
+
+### Programmatic multi-panel figures
+
+When panels are generated programmatically (e.g., looping over outcomes or specifications), compose them with `patchwork` inside a single chunk rather than using `layout-ncol` on loop output:
+
+```r
+#| label: fig-all-responses
+#| fig-cap: "Impulse responses across outcomes"
+
+library(patchwork)
+
+plots <- map(outcomes, make_irf_plot)
+wrap_plots(plots, ncol = 2)
+```
+
+### Rules
+
+- **Do NOT** use `layout-ncol` as a chunk option inside a single chunk that produces multiple figures via a loop; Quarto cannot reliably assign subcaptions to loop output
+- For 2-3 static panels: prefer Quarto-native subfigure divs (gives individual cross-references)
+- For many panels or programmatic generation: prefer patchwork composition (simpler, one chunk)
+- Always provide a `fig-cap` at the composite level
 
 ## Markdown Formatting
 

@@ -113,7 +113,8 @@ quarto render docs/report.qmd
 
 ### Languages and Packages
 
-- **R 4.5** with tidyverse, targets, tarchetypes, here, renv, quarto, fixest (or equivalent for LP/DiD)
+- **R 4.5** with tidyverse, targets, tarchetypes, here, renv, quarto, fixest, did, modelsummary, patchwork, tinytable
+- **Table/regression output**: Use `modelsummary()` for regression tables and `tinytable::tt()` for data tables. Do NOT use `gt` or `etable()`.
 - **Quarto** for scientific publishing
 - **targets** for reproducible pipelines
 - **Claude Code** for AI-assisted development
@@ -197,6 +198,16 @@ These 10 rules govern how Claude operates in this project. Verbatim from `COMPAN
 9. **Quarto render safety.** Always render specific files, never the full project.
 
 10. **Strategy reconciliation.** After stage gate crossings or when 3+ unresolved deltas accumulate in `docs/deltas.md`, run `/strategy-sync`.
+
+---
+
+## Project-Specific Conventions
+
+These conventions extend the 10 Workflow Conventions above with rules specific to this project's econometric pipeline. They do not replace or modify any rule in COMPANION.md.
+
+11. **Empirical verification.** When unsure whether something works (e.g., variable labels surviving a pipeline, Quarto layout mechanics, R function behavior), run the code to check empirically rather than reasoning about it. Use `/test-assumption` when the test requires rendering or pipeline execution.
+
+12. **Memory consciousness.** Be memory-conscious with R estimation pipelines. Avoid loading all columns when only a subset is needed. For large specification grids, compute cumulative effects inline rather than storing all model objects. Watch for OOM and segfault risks with panel data.
 
 ---
 
