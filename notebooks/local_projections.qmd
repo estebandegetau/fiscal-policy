@@ -76,7 +76,9 @@ build_summary_table <- function(tx_id, outcome_labels, lp_cumulative, lp_models)
 }
 ```
 
-## CIT Cuts
+## CIT
+
+### Cuts
 
 ::: {#fig-cit-cut layout-ncol=2}
 
@@ -125,7 +127,7 @@ lp_plots$cit_cut_consumption
 Cumulative effect of a 1 pp CIT cut on selected outcomes (EAP)
 :::
 
-## CIT Hikes
+### Hikes
 
 ::: {#fig-cit-hike layout-ncol=2}
 
@@ -174,7 +176,11 @@ lp_plots$cit_hike_consumption
 Cumulative effect of a 1 pp CIT hike on selected outcomes (EAP)
 :::
 
-## PIT Cuts
+
+
+## PIT
+
+### Cuts
 
 ::: {#fig-pit-cut layout-ncol=2}
 
@@ -223,7 +229,7 @@ lp_plots$pit_cut_consumption
 Cumulative effect of a 1 pp PIT cut on selected outcomes (EAP)
 :::
 
-## PIT Hikes
+### Hikes
 
 ::: {#fig-pit-hike layout-ncol=2}
 
@@ -274,7 +280,7 @@ Cumulative effect of a 1 pp PIT hike on selected outcomes (EAP)
 
 ## Summary
 
-::: {#tbl-lp-5}
+:::{#tbl-lp-cit}
 
 ```{r}
 #| label: tbl-cit-cut-summary
@@ -290,6 +296,12 @@ build_summary_table("cit_cut", outcome_labels, lp_cumulative, lp_models)
 build_summary_table("cit_hike", outcome_labels, lp_cumulative, lp_models)
 ```
 
+Cumulative effects of Corporate income tax changes after 5 years (EAP countries)
+:::
+
+::: {#tbl-lp-pit}
+
+
 ```{r}
 #| label: tbl-pit-cut-summary
 #| tbl-cap: "PIT Cuts"
@@ -304,39 +316,9 @@ build_summary_table("pit_cut", outcome_labels, lp_cumulative, lp_models)
 build_summary_table("pit_hike", outcome_labels, lp_cumulative, lp_models)
 ```
 
-Cumulative effect of tax changes after 5 years (EAP)
+Cumulative effect of Personal income tax changes after 5 years (EAP Countries)
 :::
 
 
-@tbl-lp-5 shows very few statistically significant coefficients. Most importantly, "first stage" coefficients (tax revenue, income tax revenue, and individual income tax revenue) are highly insignificant.
-
-These results highlight the importance of using micro data to measure outcomes. Cuts and hikes are estimated separately to allow for asymmetric effects.
-
----
 
 
-
-```{r}
-#| label: appendix-results
-#| results: asis
-#| include: false
-
-tx_labels <- c(cit_cut = "CIT Cut", cit_hike = "CIT Hike", pit_cut = "PIT Cut", pit_hike = "PIT Hike")
-
-for (tx_id in names(lp_treatments())) {
-  for (out_id in names(lp_outcomes())) {
-    bid <- paste0(tx_id, "_", out_id)
-    cat("\n\n## ", tx_labels[[tx_id]], " \u2014 ", outcome_labels[[out_id]], "\n\n")
-    cat("::: {.panel-tabset}\n\n")
-
-    for (g in c("MIC", "HIC")) {
-      cat("### ", g, "\n\n")
-      p <- plot_irf(lp_cumulative[[bid]], bid, group = g)
-      print(p)
-      cat("\n\n")
-    }
-
-    cat(":::\n\n")
-  }
-}
-```

@@ -20,6 +20,7 @@ _targets/
 data/
 !data/.gitkeep
 docs/**/*.pdf
+scott/
 
 # Output files (reproducible from code)
 output/*

@@ -80,7 +80,9 @@ build_firm_summary_table <- function(tx_id, outcome_labels, lp_firm_cumulative, 
 }
 ```
 
-## CIT Cuts
+## CIT
+
+### Cuts
 
 ::: {#fig-firm-cit-cut layout-ncol=2}
 
@@ -141,7 +143,7 @@ lp_firm_plots$cit_cut_profit_per_employee
 Cumulative effect of a 1 pp CIT cut on firm-level outcomes (EAP)
 :::
 
-## CIT Hikes
+### Hikes
 
 ::: {#fig-firm-cit-hike layout-ncol=2}
 
@@ -202,7 +204,9 @@ lp_firm_plots$cit_hike_profit_per_employee
 Cumulative effect of a 1 pp CIT hike on firm-level outcomes (EAP)
 :::
 
-## PIT Cuts
+## PIT
+
+### Cuts
 
 ::: {#fig-firm-pit-cut layout-ncol=2}
 
@@ -263,7 +267,7 @@ lp_firm_plots$pit_cut_profit_per_employee
 Cumulative effect of a 1 pp PIT cut on firm-level outcomes (EAP)
 :::
 
-## PIT Hikes
+### Hikes
 
 ::: {#fig-firm-pit-hike layout-ncol=2}
 
