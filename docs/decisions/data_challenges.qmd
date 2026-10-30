@@ -150,17 +150,98 @@ $$
 
 The same logic applies to `change_individual_tr` / `change_individual_tr2` (PIT) and `change_vat_tr` / `change_vat_tr2` (VAT).
 
-## Finding 3: These variables are not suitable as treatments for causal analysis
+As established in Finding 3 below, the underlying *levels* (`corporate_tr`, `individual_tr`, `vat_tr`) are statutory rates from @vegh2015 — highest marginal rates sourced from WDI and World Tax Database. The `change_*` variables are therefore first-differences of statutory rates, not narratively identified policy shocks. This distinction matters: while the rate levels are clean, mechanically first-differencing them does not isolate exogenous policy actions from endogenous policy responses (see Finding 4).
 
-The variable `corporate_tr` in the dataset is the *observed* corporate tax rate — a macro aggregate. Its first-difference captures *any* year-over-year change in this rate, regardless of the cause. This includes:
+## Finding 3: Tax rate levels traced to Vegh & Vuletin (2015)
 
-- **Statutory changes**: A government passes a law changing the corporate tax rate. This is a policy action and is arguably exogenous to current economic conditions (especially under the narrative identification framework of Romer & Romer 2010).
-- **Compositional shifts**: Even without a law change, the effective/average corporate tax rate can shift because the composition of the tax base changes — e.g., more profitable firms (taxed at higher brackets) enter or exit the economy, or tax compliance varies with the business cycle.
-- **Mechanical responses**: Tax revenues (and effective rates) move with GDP. During booms, more firms hit higher brackets; during recessions, losses reduce the effective rate. These movements are *caused by* the very outcomes we are trying to estimate effects on.
+The `corporate_tr`, `individual_tr`, `vat_tr`, and `vat_tr_introduced` columns in the `data/` version of `Full_sample_filtered.dta` share identical names with the variables in @vegh2015. A direct comparison confirms the values are identical:
 
-Using the first-difference of the observed rate as a treatment variable creates a classic endogeneity problem: the "treatment" is partly a function of the outcome. This violates the identifying assumption of local projections and renders the estimated impulse responses difficult to interpret causally.
+```{r}
+#| label: vegh-match
+#| code-fold: true
+#| code-summary: "Compare tax rate levels between Full_sample_filtered.dta and Vegh & Vuletin (2015)"
+library(readxl)
 
-Statutory tax changes — changes in the *law* rather than the *macro variable* — are substantially cleaner. They represent discrete policy decisions and are the standard treatment in the fiscal multiplier literature (Romer & Romer 2010; Mertens & Ravn 2013). Agustín Samano has identified two available data sources of statutory tax changes that cover South East Asia. These are the appropriate treatment variables for this project.
+vegh <- read_excel(here::here("data/Tax rate Data_v5.xlsx"), sheet = "Data")
+
+merged <- inner_join(
+  vegh |> select(country, year,
+                 corporate_tr_vegh = corporate_tr,
+                 individual_tr_vegh = individual_tr,
+                 vat_tr_vegh = vat_tr),
+  data |> select(country, year, corporate_tr, individual_tr, vat_tr) |> distinct(),
+  by = c("country", "year")
+)
+
+compare_corp <- merged |>
+  filter(!is.na(corporate_tr_vegh) & !is.na(corporate_tr))
+
+compare_pit <- merged |>
+  filter(!is.na(individual_tr_vegh) & !is.na(individual_tr))
+
+compare_vat <- merged |>
+  filter(!is.na(vat_tr_vegh) & !is.na(vat_tr))
+
+tibble::tibble(
+  variable = c("corporate_tr", "individual_tr", "vat_tr"),
+  n_compared = c(nrow(compare_corp), nrow(compare_pit), nrow(compare_vat)),
+  n_match = c(
+    sum(abs(compare_corp$corporate_tr_vegh - compare_corp$corporate_tr) < 1e-6),
+    sum(abs(compare_pit$individual_tr_vegh - compare_pit$individual_tr) < 1e-6),
+    sum(abs(compare_vat$vat_tr_vegh - compare_vat$vat_tr) < 1e-6)
+  ),
+  match_rate = scales::percent(n_match / n_compared, accuracy = 0.1)
+) |>
+  tinytable::tt(caption = "Value comparison: Full_sample_filtered.dta vs. Vegh & Vuletin (2015)")
+```
+
+The match is perfect across all three tax types and 48 countries (45 matched by name, plus 3 name mismatches: Czechia/Czech Republic, Korea Rep./Korea Republic, Türkiye/Turkey).
+
+According to @vegh2015, these are **statutory rates**: highest marginal personal and corporate income tax rates sourced from WDI and the World Tax Database (University of Michigan, Ross School of Business), with updates from local sources and international consulting firms, covering 1960–2013.
+
+### Three South East Asian countries are unaccounted for
+
+Indonesia, Malaysia, and Vietnam have non-NA `corporate_tr` and `individual_tr` data in `Full_sample_filtered.dta` but are **completely absent** from @vegh2015:
+
+```{r}
+#| label: unaccounted-countries
+#| code-fold: true
+#| code-summary: "Countries with tax rate data not in Vegh & Vuletin (2015)"
+vegh_countries <- unique(vegh$country)
+name_map <- c("Czechia" = "Czech Republic",
+              "Korea, Rep." = "Korea, Republic",
+              "Türkiye" = "Turkey")
+
+data |>
+  mutate(vegh_name = if_else(country %in% names(name_map),
+                             name_map[country], country)) |>
+  filter(!vegh_name %in% vegh_countries) |>
+  filter(!is.na(corporate_tr) | !is.na(individual_tr) | !is.na(vat_tr)) |>
+  group_by(country) |>
+  summarise(
+    year_range = paste(min(year), max(year), sep = "–"),
+    n_corporate_tr = sum(!is.na(corporate_tr)),
+    n_individual_tr = sum(!is.na(individual_tr)),
+    n_vat_tr = sum(!is.na(vat_tr)),
+    .groups = "drop"
+  ) |>
+  tinytable::tt(caption = "Countries with tax rate data not sourced from Vegh & Vuletin (2015)")
+```
+
+These three countries are key to the project's South East Asian focus — likely included because they are important partners to the World Bank regional office. Their tax rate data was added to `Full_sample_filtered.dta` by the unknown upstream pipeline, and no code in `scott/` constructs or merges these variables. The Stata do-files contain zero references to any `_tr` variable, and the Python notebook (`scott/code/python/tax_rate_fig.ipynb`) references `change_corporate_tr` from Excel files that are missing from the repository.
+
+## Finding 4: First-differenced statutory rates are not suitable as treatments for causal analysis
+
+As established in Finding 3, the `corporate_tr` variable contains **statutory** tax rates from @vegh2015 — highest marginal rates, not observed/effective rates. This rules out two sources of endogeneity that would arise with effective rates (compositional shifts in the tax base and mechanical responses to the business cycle). However, mechanically first-differencing statutory rates still does not produce a clean treatment for causal analysis.
+
+The first-difference of the statutory rate captures the timing and magnitude of every legislative rate change, but does not distinguish between:
+
+- **Exogenous policy actions**: Tax changes motivated by long-run structural goals, ideological preferences, or inherited fiscal commitments — unrelated to current economic conditions. These are the valid "shocks" under the narrative identification framework of Romer & Romer (2010).
+- **Endogenous policy responses**: Tax changes enacted *because of* current or anticipated economic conditions — e.g., a countercyclical tax cut during a recession or a revenue-raising hike during a fiscal crisis. These are confounded with the outcomes we aim to estimate.
+
+Using first-differenced statutory rates as a treatment variable therefore conflates exogenous shocks with endogenous responses. The identifying assumption of local projections — that the treatment is uncorrelated with contemporaneous shocks to the outcome — is violated whenever a rate change was motivated by the economic conditions the model is trying to explain.
+
+Narratively identified fiscal shocks — changes in the *law* whose motivation has been classified as exogenous based on the legislative record — are the standard treatment in the fiscal multiplier literature (Romer & Romer 2010; Mertens & Ravn 2013). Agustín Samano has identified two available data sources of such shocks that cover South East Asia. These are the appropriate treatment variables for this project.
 
 ## Decision: Drop `Full_sample_filtered.dta`
 
@@ -170,13 +251,17 @@ We will stop using `data/Full_sample_filtered.dta` as a project input. The reaso
 
 2. **Overwritten input.** The `scott/` directory contains the original 75-column version. The `data/` version has the same filename but is a fundamentally different dataset (3× the rows, 4× the columns). At some point in the project's history, the original input was replaced by a downstream product. Overwriting input data with derived data is a cardinal reproducibility failure — it makes it impossible to distinguish raw data from processed data, and any re-run of the original code would produce different results depending on which version is present.
 
-3. **Wrong treatment variable.** Even if the data were perfectly documented and reproducible, the treatment variables it contains are not suitable for causal analysis. They capture observed rate changes, not statutory policy shocks.
+3. **Wrong treatment variable.** Even if the data were perfectly documented and reproducible, the treatment variables it contains are not suitable for causal analysis. They are mechanical first-differences of statutory rates (Finding 2), not narratively identified policy shocks (Finding 4).
+
+4. **Unaccounted data for key countries.** The tax rate data for Indonesia, Malaysia, and Vietnam — three countries central to the project's South East Asian focus — cannot be traced to any documented source (Finding 3).
 
 ## Path forward
 
 ### 1. Statutory tax change data (treatment variables)
 
-Agustín has identified two data sources of statutory tax changes covering our countries and time period. Once obtained, these replace `change_corporate_tr` and friends as the treatment variables in the local projections pipeline. The pipeline code (`R/local_projections.R`) is treatment-agnostic — `lp_treatments()` simply points at column names, so the mechanical changes are modest. The conceptual change is significant: we move from an endogenous macro variable to a cleaner policy shock measure.
+@vegh2015 (`data/Tax rate Data_v5.xlsx`) provides documented statutory rate *levels* for 48 countries covering 1960–2013. This is a clean, citable source for the rate levels themselves. However, the rate levels for Indonesia, Malaysia, and Vietnam are not in @vegh2015 and must be sourced independently — likely from the same WDI / World Tax Database sources that @vegh2015 drew on, or from local government sources.
+
+The treatment variables, however, cannot be constructed by first-differencing these rates. Agustín has identified two data sources of narratively identified fiscal shocks covering our countries and time period. Once obtained, these replace `change_corporate_tr` and friends as the treatment variables in the local projections pipeline. The pipeline code (`R/local_projections.R`) is treatment-agnostic — `lp_treatments()` simply points at column names, so the mechanical changes are modest. The conceptual change is significant: we move from first-differenced statutory rates to narratively identified policy shocks.
 
 ### 2. Orbis firm data (outcome variables for Phase 2)
 
