@@ -1,0 +1,3 @@
+# The project is bind-mounted at runtime (see devcontainer.json),
+# so nothing from the build context needs to be in the image.
+*
