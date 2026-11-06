@@ -1,0 +1,69 @@
+---
+title: "Tax Incentives and Corporate Investment in Malaysia"
+subtitle: "Data wiring"
+execute:
+  cache: false
+---
+
+```{r}
+#| label: setup
+#| cache: false
+#| include: false
+
+pacman::p_load(
+  targets,
+  tidyverse,
+  tinytable,
+  here,
+  labelled
+)
+
+here::i_am("notebooks/tax_incentives.qmd")
+tar_config_set(store = here("_targets"))
+
+theme_set(theme_minimal(base_size = 13))
+```
+
+## Tax-incentive shocks
+
+The right-hand side comes from the Malaysia tax-incentive shock dataset of
+Degetau & Samano (2026) ([Fiscal-shocks](https://github.com/estebandegetau/Fiscal-shocks)),
+published at
+<https://www.estebandegetau.com/Fiscal-shocks/data/validated/MY_incentive_shocks_clean.dta>.
+The pipeline tracks the remote file (`incentive_shocks_file`, `format = "url"`),
+so any update upstream re-runs every downstream target.
+
+```{r}
+#| label: load-incentive-shocks
+
+incentive_shocks <- tar_read(incentive_shocks)
+```
+
+```{r}
+#| label: tbl-incentive-shocks-dictionary
+#| tbl-cap: "Variables in the tax-incentive shock dataset"
+
+look_for(incentive_shocks, details = "none") |>
+  as_tibble() |>
+  select(Variable = variable, Label = label) |>
+  tt()
+```
+
+```{r}
+#| label: tbl-incentive-shocks
+#| tbl-cap: "Malaysia tax-incentive shocks"
+
+incentive_shocks |>
+  select(
+    ID = shock_id,
+    Measure = act_label,
+    Category = incentive_category,
+    Base = tax_type,
+    Direction = direction,
+    Announced = announced_year,
+    Effective = effective_year,
+    Motivation = motivation,
+    Exogenous = exogenous
+  ) |>
+  tt()
+```

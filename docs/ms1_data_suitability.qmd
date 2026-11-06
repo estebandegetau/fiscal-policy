@@ -1,0 +1,364 @@
+---
+title: "Tax Policy and Corporate Investment in Malaysia"
+subtitle: "Milestone 1: Firm-level data and its suitability (draft)"
+date: today
+date-format: long
+number-sections: true
+format:
+  typst:
+    reference-location: block
+execute:
+  echo: false
+---
+
+```{r}
+#| label: setup
+#| cache: false
+#| include: false
+
+pacman::p_load(targets, tidyverse, tinytable, here)
+
+here::i_am("docs/ms1_data_suitability.qmd")
+tar_config_set(store = here("_targets"))
+
+theme_set(theme_minimal(base_size = 12))
+
+integrity_osiris <- tar_read(ms1_integrity_osiris)
+linkage <- tar_read(ms1_census_linkage)
+integrity_c30 <- tar_read(ms1_integrity_census30)
+repr <- tar_read(ms1_representativeness)
+states <- tar_read(ms1_state_distribution)
+coverage <- tar_read(ms1_coverage)
+inv_rate <- tar_read(ms1_investment_rate)
+etr <- tar_read(ms1_etr)
+feasibility <- tar_read(ms1_feasibility)
+event_means <- tar_read(ms1_event_means)
+mde <- tar_read(ms1_mde)
+cit_rates <- tar_read(my_cit_rates)
+
+pct <- \(x, d = 0) sprintf(paste0("%.", d, "f%%"), 100 * x)
+num <- \(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE)
+check <- \(tbl, label) tbl$value[tbl$check == label]
+stat <- \(label) etr$distribution$value[etr$distribution$statistic == label]
+
+link_0510 <- filter(linkage, waves == "2005–2010")
+link_1015 <- filter(linkage, waves == "2010–2015")
+osiris_share <- repr |> filter(source == "Osiris (listed firms)", year %in% 2004:2015)
+census_zero <- coverage |> filter(source == "Manufacturing Census")
+```
+
+## Summary
+
+The ToR asks us to obtain firm-level investment data for Malaysia, confirm it is suitable, and, where possible, identify which firms use tax incentives. We have three firm-level sources. Together they measure investment well. The binding constraint is linking tax changes to the firms they affect, not measuring investment.
+
+```{r}
+#| label: tbl-verdict
+#| tbl-cap: "What each source can support"
+
+tribble(
+  ~Source, ~Coverage, ~`Investment measure`, ~`Can support`,
+  "Osiris (BvD)", "~1,100 listed firms a year, 2004–2017, annual",
+  "Capex, net PP&E; effective tax rate",
+  "Causal candidate: headline CIT cuts, with exposure by effective tax rate",
+  "Manufacturing Census (DOSM)", "18k–45k establishments; 2000, 2005, 2010, 2015; IDs link across waves",
+  "Asset purchases by type; book values",
+  "Causal candidate: Iskandar (Johor); otherwise long differences",
+  "Economic Census 2022 (30%, DOSM)", "343k establishments, all sectors, one year",
+  "Fixed-asset stock only",
+  "Descriptive only"
+) |>
+  tt(width = c(1.2, 2, 1.6, 2.4))
+```
+
+Three recommendations for Milestone 2:
+
+1. **Lead with the headline CIT cuts (2007–09, 2016) in Osiris.** Firms whose pre-period effective tax rate was near zero are a candidate control group. At current sample sizes we can only detect large effects (@sec-identification).
+2. **Use the Manufacturing Census for Iskandar (2007).** Inference rests on a single treated state, so it needs few-cluster methods and a crosswalk for the industry-code break.
+3. **Present the remaining incentive shocks descriptively.** Of 15 incentive measures, one is a causal candidate with the current data. The others fall outside the data's years or need eligibility lists we do not have (@tbl-feasibility).
+
+## Data sources
+
+**Osiris (Bureau van Dijk).** Company accounts for `r num(check(integrity_osiris, "Firms"))` Malaysian listed and delisted firms over 2002–2018, in ringgit. Capital expenditure is populated from 2004. The data also give earnings before tax and income tax expense, so we can compute an effective tax rate (ETR) for each firm-year.
+
+**Manufacturing Census (DOSM).** Establishment-level waves for 2000, 2005, 2010 and 2015, with `r num(min(census_zero$units))` to `r num(max(census_zero$units))` establishments per wave. Each wave records purchases of fixed assets by type, opening and closing book values, employment, sales, state, ownership and start year. **No variable dictionary is available.** Units (assumed RM thousands), the reference year of each wave, and several fields (e.g. `f46`) are undocumented.
+
+**Economic Census 2022, 30% extract (DOSM).** `r num(check(integrity_c30$checks, "Establishments (all sector files)"))` establishments across `r check(integrity_c30$checks, "Sector files")` sector files for reference year 2022. It has value added, employment and the value of fixed assets, but no investment flow and no panel identifier.
+
+## Data integrity
+
+```{r}
+#| label: tbl-integrity-osiris
+#| tbl-cap: "Osiris integrity checks"
+
+integrity_osiris |>
+  mutate(value = num(value)) |>
+  tt() |>
+  setNames(c("Check", "Value"))
+```
+
+Osiris needs light cleaning (@tbl-integrity-osiris).
+
+- **Fiscal year-end changes.** These create `r check(integrity_osiris, "Firm-years with two statements (fiscal year-end change)")` duplicate firm-years. We keep the 12-month statement where one exists.
+- **Consolidated accounts.** Almost all statements are group accounts, so a firm's capex includes its subsidiaries, some of them abroad.
+- **Survivorship.** Delisted firms are retained, so the panel does not suffer survivorship bias.
+
+```{r}
+#| label: tbl-linkage
+#| tbl-cap: "Manufacturing Census: do IDs in consecutive waves describe the same establishment?"
+
+linkage |>
+  select(Waves = waves, Establishments = establishments_from, Linked = linked,
+         `Share linked` = share_linked, `Same start year` = same_startdate,
+         `Same state` = same_state, `Same 3-digit industry` = same_industry3) |>
+  tt() |>
+  format_tt(j = 2:3, digits = 0, num_mark_big = ",") |>
+  format_tt(j = 4:7, fn = \(x) pct(x, 1))
+```
+
+The census IDs do track establishments (@tbl-linkage).
+
+- **Linkage holds.** About 60% of establishments reappear in the next wave. Of those, `r pct(min(linkage$same_state), 0)`–`r pct(max(linkage$same_state), 0)` keep the same state. Start-year agreement is lower (`r pct(min(linkage$same_startdate), 0)`–`r pct(max(linkage$same_startdate), 0)`). This is worth raising with DOSM, but it is consistent with reporting error rather than ID reuse. `r num(linkage$in_all_waves[1])` establishments appear in all four waves.
+- **The industry codes break.** Linked establishments keep their 3-digit industry code `r pct(link_1015$same_industry3, 0)` of the time between 2010 and 2015, but only `r pct(link_0510$same_industry3, 1)` between 2005 and 2010. This is the switch from MSIC 2000 to MSIC 2008, and it falls right on the 2007–2010 shocks. Any design that assigns exposure by industry across 2007 needs a concordance.
+
+```{r}
+#| label: tbl-integrity-c30
+#| tbl-cap: "Economic Census 2022 integrity checks"
+
+integrity_c30$checks |>
+  mutate(value = num(value)) |>
+  tt() |>
+  setNames(c("Check", "Value"))
+```
+
+The 2022 extract has two issues to resolve with DOSM (@tbl-integrity-c30).
+
+- **Two manufacturing files with unclear relation.** Both contain 16,352 establishments, but they cover different firms (`r num(integrity_c30$manufacturing_files$persons_engaged[1])` vs `r num(integrity_c30$manufacturing_files$persons_engaged[2])` persons engaged). Shared dummy IDs never describe the same establishment.
+- **Unreliable IDs and states.** Dummy IDs repeat within some files, notably F&B. Construction is reported at national level only, so it has no state. Neither issue matters for cross-sectional use.
+
+## Coverage and representativeness
+
+```{r}
+#| label: fig-representativeness
+#| fig-cap: "Investment in each source as a share of Malaysia's private gross fixed capital formation (WDI). Census waves are plotted at the wave year and the year before, since the reference year is undocumented."
+#| fig-height: 3.5
+
+repr |>
+  filter(year >= 2003, !is.na(share_private)) |>
+  ggplot(aes(year, share_private, colour = source, shape = match)) +
+  geom_line(data = \(d) filter(d, source == "Osiris (listed firms)")) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::label_percent(), limits = c(0, NA)) +
+  scale_shape_manual(values = c(`Same year` = 16, `Year before wave` = 1)) +
+  labs(x = NULL, y = "Share of private GFCF", colour = NULL, shape = NULL) +
+  theme(legend.position = "bottom", legend.box = "vertical")
+```
+
+Both sources cover a large part of national investment (@fig-representativeness), but they need caution when read as aggregates.
+
+- **Osiris overstates its coverage.** Its capex equals `r pct(min(osiris_share$share_private))`–`r pct(max(osiris_share$share_private))` of private GFCF over 2004–2015. That is implausibly high for about 1,000 firms. It reflects consolidated group accounts, which include overseas spending, and government-linked companies, which national accounts classify as public. The five largest investors account for about a third of Osiris capex each year. Petronas alone adds RM 50bn when it enters the data in 2016. Firm-level regressions should exclude or separately control for government-linked companies and use investment rates, not levels.
+- **The census looks plausible.** Manufacturing purchases equal `r pct(min(filter(repr, source == "Manufacturing Census", match == "Same year")$share_private))`–`r pct(max(filter(repr, source == "Manufacturing Census", match == "Same year")$share_private))` of private GFCF, which is consistent with manufacturing's share of investment if purchases are in RM thousands.
+
+```{r}
+#| label: tbl-states
+#| tbl-cap: "State distribution of manufacturing establishments"
+
+states |>
+  select(State = state_name, source, share) |>
+  pivot_wider(names_from = source, values_from = share) |>
+  tt() |>
+  format_tt(j = 2:3, fn = \(x) pct(x, 1))
+```
+
+The state distribution of manufacturing establishments is stable between the 2015 census and the 2022 extract (@tbl-states). The exceptions are Selangor and Kuala Lumpur, which likely reflects whether head offices or plants are recorded. Johor, the Iskandar state, accounts for about 17% of establishments in both.
+
+## Measuring investment
+
+```{r}
+#| label: tbl-coverage
+#| tbl-cap: "Variable coverage (share non-missing) and share of zero investment"
+
+coverage |>
+  filter(source == "Manufacturing Census" | year %in% c(2002, 2004, 2006, 2008, 2010, 2012, 2014, 2016, 2018)) |>
+  select(Source = source, Year = year, Units = units, Capex = capex,
+         `Capital stock` = ppe, Employment = employment,
+         `Tax & EBT` = tax_and_ebt, `Zero investment` = zero_investment) |>
+  tt() |>
+  format_tt(j = 3, digits = 0, num_mark_big = ",") |>
+  format_tt(j = 4:8, fn = \(x) pct(x))
+```
+
+@tbl-coverage shows three findings that shape the outcome definitions:
+
+- **Osiris employment is unusable after 2006.** It is populated for under 15% of firm-years from 2007, so employment outcomes must come from the census.
+- **Osiris has no zero-investment observations.** Missing capex (about 15% of firm-years) probably includes true zeros. Treating missing as zero would change the sample, so both choices should be tested.
+- **Census zeros rise over time.** The share of establishments with no purchases rises from `r pct(census_zero$zero_investment[1])` in 2000 to `r pct(census_zero$zero_investment[4])` in 2015. It may reflect the sample growing to include more small establishments, or a change in the questionnaire. This needs checking with DOSM before the census is used for trends.
+
+```{r}
+#| label: tbl-inv-rate
+#| tbl-cap: "Investment rate (investment over lagged capital stock)"
+
+inv_rate |>
+  select(Source = source, Version = version, N = n, P10 = p10,
+         Median = median, Mean = mean, P90 = p90, Max = max) |>
+  tt() |>
+  format_tt(j = 3, digits = 0, num_mark_big = ",") |>
+  format_tt(j = 4:8, digits = 2, num_fmt = "decimal")
+```
+
+The investment rate has extreme right tails in both sources (@tbl-inv-rate). Winsorizing at the 1st and 99th percentiles brings the mean close to the median-to-P90 range. Because the census median is zero, we propose two census outcomes: whether an establishment invests at all, and the investment rate among those that do.
+
+## Can we see which firms use incentives? {#sec-etr}
+
+```{r}
+#| label: tbl-etr
+#| tbl-cap: "Effective tax rate (income tax expense over pre-tax earnings, firm-years with positive earnings), Osiris"
+
+etr$distribution |>
+  mutate(value = if_else(value > 1, num(round(value)), sprintf("%.2f", value))) |>
+  tt() |>
+  setNames(c("Statistic", "Value"))
+```
+
+No source flags incentive recipients directly. The ETR is a usable proxy for listed firms (@tbl-etr).
+
+- **The level is plausible.** The median ETR is `r pct(stat("Median effective tax rate"))`, close to the statutory rate.
+- **There is a low-ETR tail.** `r pct(stat("Share of firm-years with ETR below 5%"))` of firm-years have an ETR below 5%.
+- **Low-ETR status is persistent.** About half of low-ETR firm-years are followed by another, and `r stat("Firms with ETR below 5% in most years (≥5 years observed)")` firms are below 5% in most years. That is the pattern a multi-year tax holiday such as Pioneer Status would produce.
+
+The proxy is noisy. A low ETR also arises from loss carry-forwards, REIT pass-through status and the shipping exemption, and the persistent low-ETR list includes REITs and shipping firms. **Proposed validation:** hand-check the `r nrow(etr$candidates)` most persistent low-ETR firms (@tbl-etr-candidates) against Bursa annual reports for Pioneer Status or Investment Tax Allowance disclosures. We estimate this takes about one day. The census has no tax variables.
+
+```{r}
+#| label: tbl-etr-candidates
+#| tbl-cap: "Firms with the most persistent low effective tax rate (candidates for annual-report check)"
+
+etr$candidates |>
+  slice_head(n = 10) |>
+  select(Firm = firm_name, Sector = division, Years = years,
+         `Share of years ETR < 5%` = share_low, `Median ETR` = median_etr) |>
+  tt() |>
+  format_tt(j = 4, fn = \(x) pct(x)) |>
+  format_tt(j = 5, digits = 3, num_fmt = "decimal")
+```
+
+## Which tax changes can we study?
+
+@tbl-feasibility crosses each tax change with our data. It covers the 15 incentive shocks from Degetau & Samano (2026) plus the statutory headline and SME rate cuts. The timing columns are computed. The exposure, proxy, cost and verdict columns are **proposals for author review**. We have not coded firm-level eligibility; the cost column estimates what it would take.
+
+```{r}
+#| label: tbl-feasibility
+#| tbl-cap: "Feasibility of each tax change. Pre/post: years (Osiris, 2004–2017) or waves (Manufacturing Census) before and from the effective year. Exposure, proxy, cost and verdict are for author review."
+
+feasibility |>
+  transmute(
+    ID = shock_id,
+    Measure = act_label,
+    Year = effective_year,
+    `Osiris pre/post` = sprintf("%d / %d", osiris_pre, osiris_post),
+    `Census pre/post` = sprintf("%d / %d", census_pre, census_post),
+    Exposure = exposure,
+    `Proxy in data` = proxy,
+    `Mapping cost` = cost,
+    Verdict = verdict
+  ) |>
+  tt(width = c(0.9, 2.2, 0.5, 0.7, 0.7, 1.5, 1.5, 1.4, 1.1)) |>
+  style_tt(i = which(str_starts(feasibility$verdict, "Causal")), bold = TRUE) |>
+  style_tt(fontsize = 0.75)
+```
+
+Three patterns stand out:
+
+1. **Timing rules out most incentive measures.** Five predate both datasets (1980–1996). Six take effect after the last census wave or Osiris year with investment data (2019–2023).
+2. **The in-window incentives are mostly status-based.** Green Building, KLIFD/TRX and angel-investor relief apply to firms or investors we cannot identify without approval lists. Iskandar is the exception: it is a zone, and the census records state.
+3. **The statutory cuts are the best-measured shocks.** They hit every taxpaying firm, so a design needs firms on whom the cut does not bite. Osiris's ETR gives one. The census has no tax data, and the SME cuts after 2015 fall after its last wave.
+
+## Identification prerequisites {#sec-identification}
+
+```{r}
+#| label: fig-event-means
+#| fig-cap: "Raw means by exposure group (not estimates). Osiris: winsorized investment rate for firms with a pre-period effective tax rate below 5% versus taxpaying firms. Census: share of establishments with positive purchases, Johor versus other states. Dashed lines mark the effective year."
+#| fig-height: 6
+
+event_means |>
+  mutate(design = factor(design, levels = unique(design))) |>
+  ggplot(aes(year, mean, colour = group)) +
+  geom_line() +
+  geom_point(size = 1.5) +
+  geom_vline(
+    data = tibble(design = factor(unique(event_means$design), levels = unique(event_means$design)),
+                  year = c(2007, 2016, 2007)),
+    aes(xintercept = year), linetype = "dashed", colour = "grey50"
+  ) +
+  facet_wrap(~design, ncol = 1, scales = "free_y") +
+  labs(x = NULL, y = NULL, colour = NULL) +
+  theme(legend.position = "bottom")
+```
+
+The raw means in @fig-event-means give an early read on the designs. **They are not estimates.**
+
+- **2007–09 headline cuts (Osiris).** Before the cut, the low-ETR group's investment rate jumps in 2005–06, while taxpaying firms stay flat. Pre-trends are not parallel in the raw data. A credible design would need covariates, matching on sector, or a different exposure definition.
+- **2016 headline cut (Osiris).** The groups move more closely before 2016, but there are only two post-years, and the low-ETR group is small and noisy.
+- **Iskandar (census).** Johor's investing share is above other states' in every wave, and the gap widens between 2005 and 2010. But the design has only one pre-wave before 2007, and the 2008–09 financial crisis falls between the 2005 and 2010 waves. The steady fall in the share of establishments investing across all states (@tbl-coverage) also needs explaining first.
+
+```{r}
+#| label: tbl-mde
+#| tbl-cap: "Minimum detectable effects (80% power, 5% two-sided), from one pre/post change per firm"
+
+mde |>
+  select(Design = design, Outcome = outcome, Treated = treated,
+         `N treated` = n_treated, `N control` = n_control,
+         `Pre-period mean` = mean_outcome, MDE = mde) |>
+  mutate(`MDE / mean` = MDE / `Pre-period mean`) |>
+  tt() |>
+  format_tt(j = 4:5, digits = 0, num_mark_big = ",") |>
+  format_tt(j = 6:7, digits = 3, num_fmt = "decimal") |>
+  format_tt(j = 8, fn = \(x) pct(x))
+```
+
+@tbl-mde shows how large an effect each design could detect.
+
+- **Osiris designs are underpowered.** They can only detect a change in the investment rate of about `r sprintf("%.2f", min(mde$mde[str_detect(mde$design, "Osiris")]))`, roughly 40% of the pre-period mean. Plausible responses to a one-percentage-point rate cut are much smaller. In practice, the four 2007–09 and 2016 cuts would have to be pooled into one continuous-treatment design, which the macro pipeline already supports.
+- **Iskandar has power on paper but one treated cluster.** The census design can detect a `r pct(mde$mde[str_detect(mde$design, "Iskandar")], 1)` change in the share investing. That calculation ignores that treatment is assigned to a single state. Valid inference needs few-cluster methods, such as randomization inference over states or synthetic control, and those will be much less precise.
+
+## Open issues and next steps
+
+**To resolve with DOSM** (no dictionary is available):
+
+- The reference year of each census wave.
+- Units of the monetary variables (assumed RM thousands).
+- The meaning of `f46`.
+- Why the share of establishments with zero investment rises.
+- How the two 2022 manufacturing files relate.
+- An MSIC 2000 → 2008 concordance at establishment level.
+
+**For the authors:**
+
+- **Verify the statutory rate schedule.** @tbl-cit was hand-entered from Budget speeches and LHDN rulings; no documented source exists in the repository.
+- **Review the judgment columns** in @tbl-feasibility.
+- **Run the Bursa annual-report check** of the persistent low-ETR firms (about one day).
+
+**Cost of eligibility coding** (the main obstacle to causal estimates of individual incentives):
+
+- **Zones (Iskandar, Labuan):** low cost with the census `state` variable. Osiris would need its city field geocoded (about one day).
+- **Sectors (pharmaceuticals, biomass):** low once we have the MSIC concordance, but these sectors are mostly outside our data's window or coverage.
+- **Status-based incentives (Pioneer Status, ITA, MSC, Principal Hub, relocation):** high. We would need MIDA or MDEC approval lists matched to firms by name. Approval lists are not public, so this would need a data request.
+
+**To agree with Agustín before Milestone 2:**
+
+- **Causal:** the pooled headline-cut design in Osiris, with low-ETR firms as controls, and the Iskandar design in the census with few-cluster inference.
+- **Descriptive:** all remaining incentive measures, using the 2022 census and the ETR distribution.
+
+```{r}
+#| label: tbl-cit
+#| tbl-cap: "Statutory corporate income tax rates by year of assessment (%). Hand-entered, to be verified by the authors."
+
+cit_rates |>
+  filter(year >= 2002, year <= 2024) |>
+  group_by(headline_rate, sme_rate) |>
+  summarise(Years = if_else(min(year) == max(year), as.character(min(year)),
+                            paste(min(year), max(year), sep = "–")),
+            .groups = "drop") |>
+  arrange(Years) |>
+  select(Years, Headline = headline_rate, `SME (first tranche)` = sme_rate) |>
+  tt() |>
+  format_tt(replace = "—")
+```

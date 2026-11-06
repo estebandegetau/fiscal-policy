@@ -10,6 +10,28 @@ accumulate.
 
 ---
 
+## 2026-10-30: Malaysia ToR adds a single-country firm-level data path
+
+**Type:** scope-change
+**Affects:** `docs/strategy.md` > Data and Scope; `CLAUDE.md` > Current Status
+**Detail:** The Malaysia ToR (`docs/ToR_Tax_Policy_and_Corporate_Investment_Malaysia.docx`, box due 15 Feb 2027) adds a Malaysia-only workstream outside Phases 1–3. Milestone 1 builds a separate data path in ringgit (`R/ms1_data.R`, `R/ms1_diagnostics.R`, `docs/ms1_data_suitability.qmd`):
+
+- Osiris, Malaysia subset.
+- DOSM Manufacturing Census, 2000–2015 panel.
+- DOSM Economic Census 2022.
+- Hand-entered statutory CIT schedule (unverified).
+- WDI investment benchmark.
+
+It does not use `clean_orbis_data()` (USD, cross-country). Findings that bear on strategy:
+
+- Only Iskandar (2007) among the 15 incentive shocks is a causal candidate with current data.
+- Headline CIT cuts are best identified via effective-tax-rate exposure in Osiris, but are underpowered (MDE ~40% of the mean investment rate).
+- The census has an MSIC 2000→2008 break between the 2005 and 2010 waves.
+
+**Suggested edit:** Add the Malaysia workstream and its milestones to Data and Scope and Implementation Sequencing. Record the statutory CIT cuts as in scope, and note that the shock dataset has `delta_pp` for only 1 of 15 incentive shocks.
+
+---
+
 ## 2026-03-20: Phase 1 complete — macro local projections graduated
 
 **Type:** status-change

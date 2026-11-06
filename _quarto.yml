@@ -30,9 +30,11 @@ website:
       - section: "Decisions"
         contents:
           - docs/decisions/data_challenges.qmd
+          - docs/ms1_data_suitability.qmd
       - section: "Data Foundation"
         contents:
           - notebooks/explore_orbis.qmd
+          - notebooks/tax_incentives.qmd
       - section: "Results"
         contents:
           - notebooks/local_projections.qmd
