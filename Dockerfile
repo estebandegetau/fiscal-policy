@@ -39,6 +39,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     # For targets and quarto
     pandoc \
+    # GLPK: runtime dependency of igraph, which targets loads for its graph
+    libglpk-dev \
     # Node.js for Claude Code
     curl \
     ca-certificates \
