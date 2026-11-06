@@ -34,7 +34,6 @@ etr <- tar_read(ms1_etr)
 feasibility <- tar_read(ms1_feasibility)
 event_means <- tar_read(ms1_event_means)
 mde <- tar_read(ms1_mde)
-cit_rates <- tar_read(my_cit_rates)
 
 pct <- \(x, d = 0) sprintf(paste0("%.", d, "f%%"), 100 * x)
 num <- \(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE)
@@ -49,12 +48,9 @@ census_zero <- coverage |> filter(source == "Manufacturing Census")
 
 ## Summary
 
-The ToR asks us to obtain firm-level investment data for Malaysia, confirm it is suitable, and, where possible, identify which firms use tax incentives. We have three firm-level sources. Together they measure investment well. The binding constraint is linking tax changes to the firms they affect, not measuring investment.
+This report checks whether the firm-level data available for Malaysia can measure corporate investment and the firm features that determine exposure to tax changes, and whether it can show which firms use tax incentives. We have three firm-level sources. Together they measure investment well.
 
-[In general, this document should be self contained. Specifically, instead of saying the ToR asks for something, simply state what this report is trying to do: Check suitability of data on corporate investment and relevant firm features...]{.aside}
-
-
-["The binding constraint" resembles nothing. Reword to state clearly how possible/costly it would be to do.]{.aside}
+Linking tax changes to the firms they affect varies in difficulty. For the headline CIT cuts it is cheap: the effective tax rate in Osiris already separates taxpaying firms from the rest. For zone-based incentives it is also cheap, because the census records state. For status-based incentives (Pioneer Status, Investment Tax Allowance, MSC status) it is not possible with the current data. It would need MIDA or MDEC approval lists, which are not public and would require a data request.
 
 ```{r}
 #| label: tbl-verdict
@@ -86,9 +82,7 @@ Three recommendations for Milestone 2:
 
 **Osiris (Bureau van Dijk).** Company accounts for `r num(check(integrity_osiris, "Firms"))` Malaysian listed and delisted firms over 2002–2018, in ringgit. Capital expenditure is populated from 2004. The data also give earnings before tax and income tax expense, so we can compute an **effective tax rate** (ETR) for each firm-year.
 
-**Manufacturing Census (DOSM).** Establishment-level waves for 2000, 2005, 2010 and 2015, with `r num(min(census_zero$units))` to `r num(max(census_zero$units))` establishments per wave. Each wave records purchases of fixed assets by type, opening and closinzg book values, employment, sales, state, ownership and start year. **No variable dictionary is available.** Units (assumed RM thousands), the reference year of each wave, and several fields (e.g. `f46`) are undocumented.
-
-[Include a plot with number of establishment (with relevant figures) per year in the DOSM]{.aside}
+**Manufacturing Census (DOSM).** Establishment-level waves for 2000, 2005, 2010 and 2015, with `r num(min(census_zero$units))` to `r num(max(census_zero$units))` establishments per wave. Each wave records purchases of fixed assets by type, opening and closing book values, employment, sales, state, ownership and start year. **No variable dictionary is available.** Units (assumed RM thousands), the reference year of each wave, and several fields (e.g. `f46`) are undocumented.
 
 **Economic Census 2022, 30% extract (DOSM).** `r num(check(integrity_c30$checks, "Establishments (all sector files)"))` establishments across `r check(integrity_c30$checks, "Sector files")` sector files for reference year 2022. It has value added, employment and the value of fixed assets, but no investment flow and no panel identifier.
 
@@ -125,8 +119,8 @@ linkage |>
 
 The census IDs do track establishments (@tbl-linkage).
 
-- **Linkage holds.** About 60% of establishments reappear in the next wave. Of those, `r pct(min(linkage$same_state), 0)`–`r pct(max(linkage$same_state), 0)` keep the same state. Start-year agreement is lower (`r pct(min(linkage$same_startdate), 0)`–`r pct(max(linkage$same_startdate), 0)`). This is worth raising with DOSM, but it is consistent with reporting error rather than ID reuse. `r num(linkage$in_all_waves[1])` establishments appear in all four waves.
-- **The industry codes break.** Linked establishments keep their 3-digit industry code `r pct(link_1015$same_industry3, 0)` of the time between 2010 and 2015, but only `r pct(link_0510$same_industry3, 1)` between 2005 and 2010. This is the switch from MSIC 2000 to MSIC 2008, and it falls right on the 2007–2010 shocks. Any design that assigns exposure by industry across 2007 needs a concordance. This issue can be solved be imputing the latest code, matching by firm ID, and breaking ties with most frequently used.
+- **Linkage holds.** About 60% of establishments reappear in the next wave. Of those, `r pct(min(linkage$same_state), 0)`–`r pct(max(linkage$same_state), 0)` keep the same state. Start-year agreement is lower (`r pct(min(linkage$same_startdate), 0)`–`r pct(max(linkage$same_startdate), 0)`). This is consistent with reporting error rather than ID reuse, but it remains an open question. `r num(linkage$in_all_waves[1])` establishments appear in all four waves.
+- **The industry codes break.** Linked establishments keep their 3-digit industry code `r pct(link_1015$same_industry3, 0)` of the time between 2010 and 2015, but only `r pct(link_0510$same_industry3, 1)` between 2005 and 2010. This is the switch from MSIC 2000 to MSIC 2008, and it falls right on the 2007–2010 shocks. Any design that assigns exposure by industry across 2007 needs a concordance. This issue can be solved by imputing the latest code, matching by firm ID, and breaking ties with most frequently used.
 
 ```{r}
 #| label: tbl-integrity-c30
@@ -138,7 +132,7 @@ integrity_c30$checks |>
   setNames(c("Check", "Value"))
 ```
 
-The 2022 extract has two issues to resolve with DOSM (@tbl-integrity-c30).
+The 2022 extract has two open issues (@tbl-integrity-c30).
 
 - **Two manufacturing files with unclear relation.** Both contain 16,352 establishments, but they cover different firms (`r num(integrity_c30$manufacturing_files$persons_engaged[1])` vs `r num(integrity_c30$manufacturing_files$persons_engaged[2])` persons engaged). Shared dummy IDs never describe the same establishment.
 - **Unreliable IDs and states.** Dummy IDs repeat within some files, notably F&B. Construction is reported at national level only, so it has no state. Neither issue matters for cross-sectional use.
@@ -200,7 +194,7 @@ coverage |>
 
 - **Osiris employment is unusable after 2006.** It is populated for under 15% of firm-years from 2007, so employment outcomes must come from the census.
 - **Osiris has no zero-investment observations.** Missing capex (about 15% of firm-years) probably includes true zeros. Treating missing as zero would change the sample, so both choices should be tested.
-- **Census zeros rise over time.** The share of establishments with no purchases rises from `r pct(census_zero$zero_investment[1])` in 2000 to `r pct(census_zero$zero_investment[4])` in 2015. It may reflect the sample growing to include more small establishments, or a change in the questionnaire. This needs checking with DOSM before the census is used for trends.
+- **Census zeros rise over time.** The share of establishments with no purchases rises from `r pct(census_zero$zero_investment[1])` in 2000 to `r pct(census_zero$zero_investment[4])` in 2015. It may reflect the sample growing to include more small establishments, or a change in the questionnaire. Until the cause is known, the census should not be used for trends in the share investing.
 
 ```{r}
 #| label: tbl-inv-rate
@@ -254,7 +248,7 @@ etr$candidates |>
 
 ## Which tax changes can we study?
 
-@tbl-feasibility crosses each tax change with our data. It covers the 15 incentive shocks from Degetau & Samano (2026) plus the statutory headline and SME rate cuts. The timing columns are computed. The exposure, proxy, cost and verdict columns are **proposals for author review**. We have not coded firm-level eligibility; the cost column estimates what it would take.
+@tbl-feasibility crosses each tax change with our data. It covers the 15 incentive measures and the 9 statutory corporate income tax changes identified by Degetau & Samano (2026). The exogeneity column is their classification of each change as motivated by long-run or deficit concerns (exogenous) rather than the business cycle. The timing columns are computed. The exposure, proxy, cost and verdict columns are **proposals for author review**. We have not coded firm-level eligibility; the cost column estimates what it would take.
 
 
 ```{r}
@@ -267,12 +261,13 @@ feasibility |>
     Year = effective_year,
     `Osiris pre/post` = sprintf("%d / %d", osiris_pre, osiris_post),
     `Census pre/post` = sprintf("%d / %d", census_pre, census_post),
+    Exogenous = case_when(exogenous == 1 ~ "Yes", exogenous == 0 ~ "No", TRUE ~ "—"),
     Exposure = exposure,
     `Proxy in data` = proxy,
     `Mapping cost` = cost,
     Verdict = verdict
   ) |>
-  tt(width = c(2.2, 0.5, 0.7, 0.7, 1.5, 1.5, 1.4, 1.1)) |>
+  tt(width = c(2.2, 0.5, 0.7, 0.7, 0.6, 1.5, 1.5, 1.4, 1.1)) |>
   style_tt(i = which(str_starts(feasibility$verdict, "Causal")), bold = TRUE) |>
   style_tt(fontsize = 0.75)
 ```
@@ -283,7 +278,7 @@ Three patterns stand out:
 
 1. **Timing rules out most incentive measures.** Five predate both datasets (1980–1996). Six take effect after the last census wave or Osiris year with investment data (2019–2023).
 2. **The in-window incentives are mostly status-based.** Green Building, KLIFD/TRX and angel-investor relief apply to firms or investors we cannot identify without approval lists. Iskandar is the exception: it is a zone, and the census records state.
-3. **The statutory cuts are the best-measured shocks, but identification relies on differential exposure.** A rate cut applies to all firms but only lowers the marginal tax rate of firms that pay tax. Osiris lets us split firms by their pre-period ETR: firms near 0% (tax holidays, accumulated losses) are largely unaffected and serve as a comparison group. This identifies the relative response of taxpaying firms, not the aggregate effect. It is biased toward zero if low-ETR firms anticipate paying the new rate later. The census has no tax data, and the post-2015 SME cuts fall after its last wave.
+3. **The statutory cuts are the best-measured shocks, but identification relies on differential exposure.** A rate cut applies to all firms but only lowers the marginal tax rate of firms that pay tax. Osiris lets us split firms by their pre-period ETR: firms near 0% (tax holidays, accumulated losses) are largely unaffected and serve as a comparison group. This identifies the relative response of taxpaying firms, not the aggregate effect. It is biased toward zero if low-ETR firms anticipate paying the new rate later. The census has no tax data.
 
 ## Identification prerequisites {#sec-identification}
 
@@ -346,9 +341,7 @@ mde |>
 
 **For the authors:**
 
-- **Verify the statutory rate schedule.** @tbl-cit was hand-entered from Budget speeches and LHDN rulings; no documented source exists in the repository.
 - **Review the judgment columns** in @tbl-feasibility.
-- **Run the Bursa annual-report check** of the persistent low-ETR firms (about one day).
 
 **Cost of eligibility coding** (the main obstacle to causal estimates of individual incentives):
 
@@ -360,21 +353,3 @@ mde |>
 
 - **Causal:** the pooled headline-cut design in Osiris, with low-ETR firms as controls, and the Iskandar design in the census with few-cluster inference.
 - **Descriptive:** all remaining incentive measures, using the 2022 census and the ETR distribution.
-
-[Note statutory CIT rates with exogeneity tag are already produced in Degetau & Samano (2026). See https://www.estebandegetau.com/Fiscal-shocks/data/validated/MY_tax_shocks_clean.dta. Also wire this resource as we have done with tax incentives]{.aside}
-
-```{r}
-#| label: tbl-cit
-#| tbl-cap: "Statutory corporate income tax rates by year of assessment (%). Hand-entered, to be verified by the authors."
-
-cit_rates |>
-  filter(year >= 2002, year <= 2024) |>
-  group_by(headline_rate, sme_rate) |>
-  summarise(Years = if_else(min(year) == max(year), as.character(min(year)),
-                            paste(min(year), max(year), sep = "–")),
-            .groups = "drop") |>
-  arrange(Years) |>
-  select(Years, Headline = headline_rate, `SME (first tranche)` = sme_rate) |>
-  tt() |>
-  format_tt(replace = "—")
-```

@@ -304,38 +304,6 @@ test_etr <- function(osiris, low = 0.05) {
 
 # E. Feasibility matrix --------------------------------------------------------
 
-#' Statutory headline and SME rate cuts, in the shape of the shock dataset
-statutory_shocks <- function(cit_rates) {
-  cuts <- function(rate, label, base) {
-    cit_rates |>
-      arrange(year) |>
-      mutate(prev = lag(.data[[rate]])) |>
-      filter(!is.na(prev), .data[[rate]] < prev) |>
-      transmute(
-        shock_id = sprintf("%s-%d", base, year),
-        act_label = sprintf("%s cut %g%% → %g%%", label, prev, .data[[rate]]),
-        incentive_category = label,
-        effective_year = year,
-        exogenous = NA_real_
-      )
-  }
-  sme_intro <- cit_rates |>
-    filter(!is.na(sme_rate)) |>
-    slice_min(year, n = 1) |>
-    transmute(
-      shock_id = sprintf("SME-%d", year),
-      act_label = sprintf("SME rate introduced: 28%% → %g%%", sme_rate),
-      incentive_category = "SME rate",
-      effective_year = year,
-      exogenous = NA_real_
-    )
-  bind_rows(
-    cuts("headline_rate", "Statutory rate", "CIT"),
-    sme_intro,
-    cuts("sme_rate", "SME rate", "SME")
-  )
-}
-
 #' Author-review judgments for each shock (drafted by Claude, FOR AUTHOR REVIEW)
 #'
 #' exposure: how the shock differentiates firms; cost: cost of mapping
@@ -358,15 +326,16 @@ feasibility_judgments <- function() {
     "MY-INCENT-13", "Sector (pharmaceuticals, MSIC 21)", "2022 Census: MSIC 21", "Low", "Descriptive",
     "MY-INCENT-14", "Status (relocating firms)", "None", "High", "Infeasible",
     "MY-INCENT-15", "Product (EVs; consumption tax)", "None", "High", "Infeasible",
-    "CIT-2007", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
-    "CIT-2008", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
-    "CIT-2009", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
-    "CIT-2016", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate (short post-period)",
-    "SME-2003", "Size (paid-up capital ≤ RM2.5m)", "Census: employment / sales proxy", "Medium: paid-up capital not observed", "Descriptive",
-    "SME-2016", "Size (paid-up capital ≤ RM2.5m)", "Census: employment / sales proxy", "Medium", "Infeasible (after last panel wave)",
-    "SME-2017", "Size (paid-up capital ≤ RM2.5m)", "Census: employment / sales proxy", "Medium", "Infeasible (after last panel wave)",
-    "SME-2019", "Size (paid-up capital ≤ RM2.5m)", "Census: employment / sales proxy", "Medium", "Infeasible (after last panel wave)",
-    "SME-2023", "Size (paid-up capital ≤ RM2.5m)", "Census: employment / sales proxy", "Medium", "Infeasible (after last panel wave)"
+    # Statutory CIT shocks (Degetau & Samano 2026, MY_tax_shocks_clean.dta)
+    "MY-CIT-01", "All firms; bite depends on ETR", "None (before data)", "Low", "Infeasible",
+    "MY-CIT-02", "All firms; bite depends on ETR", "None (before data)", "Low", "Infeasible",
+    "MY-CIT-03", "All firms; bite depends on ETR", "None (before data)", "Low", "Infeasible",
+    "MY-CIT-04", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
+    "MY-CIT-05", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
+    "MY-CIT-06", "Dividend-paying firms (single-tier system)", "Osiris: dividends (not yet extracted)", "Low: one extra Osiris field", "Descriptive (coincides with MY-CIT-05)",
+    "MY-CIT-07", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
+    "MY-CIT-08", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate (short post-period)",
+    "MY-CIT-09", "Firms with chargeable income > RM100m (Cukai Makmur)", "Osiris: pre-tax earnings", "Low", "Infeasible (after last Osiris year)"
   )
 }
 
@@ -376,12 +345,15 @@ feasibility_judgments <- function() {
 #' feasibility_judgments() and are flagged for author review in the report.
 #' Osiris investment data are usable 2004-2017 (capex coverage); census waves
 #' are dated by file year.
-build_feasibility_matrix <- function(incentive_shocks, cit_rates, osiris_years = 2004:2017) {
+build_feasibility_matrix <- function(incentive_shocks, tax_shocks, osiris_years = 2004:2017) {
   shocks <- bind_rows(
     incentive_shocks |>
       transmute(shock_id, act_label, incentive_category, effective_year,
                 exogenous = as.numeric(exogenous)),
-    statutory_shocks(cit_rates)
+    tax_shocks |>
+      filter(tax_type == "CIT") |>
+      transmute(shock_id, act_label, incentive_category = "Statutory CIT",
+                effective_year, exogenous = as.numeric(exogenous))
   )
 
   shocks |>

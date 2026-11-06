@@ -224,38 +224,6 @@ harmonise_my_state <- function(x) {
   )
 }
 
-# Statutory CIT schedule ------------------------------------------------------
-
-#' Malaysian statutory corporate income tax rates by year of assessment
-#'
-#' Hand-entered from Budget speeches / LHDN public rulings. FOR AUTHOR
-#' VERIFICATION: no documented source exists in the repository.
-#' `sme_rate` applies to the first tranche of chargeable income of resident
-#' SMEs (paid-up capital <= RM2.5m); NA = no separate SME rate.
-#'
-#' @return Tibble, one row per year of assessment 2000-2024
-my_statutory_cit <- function() {
-  tibble(year = 2000:2024) |>
-    mutate(
-      headline_rate = case_when(
-        year <= 2006 ~ 28,
-        year == 2007 ~ 27,
-        year == 2008 ~ 26,
-        year <= 2015 ~ 25,
-        TRUE ~ 24
-      ),
-      sme_rate = case_when(
-        year <= 2002 ~ NA_real_,
-        year <= 2015 ~ 20,
-        year == 2016 ~ 19,
-        year <= 2018 ~ 18,
-        year <= 2022 ~ 17,
-        TRUE ~ 15  # first RM150k from YA2023; 17% on the next RM450k
-      ),
-      source = "Budget speeches / LHDN; to be verified by authors"
-    )
-}
-
 # WDI benchmark ---------------------------------------------------------------
 
 #' Fetch Malaysian gross fixed capital formation from the World Bank API
