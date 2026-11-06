@@ -332,8 +332,8 @@ feasibility_judgments <- function() {
     "MY-CIT-03", "All firms; bite depends on ETR", "None (before data)", "Low", "Infeasible",
     "MY-CIT-04", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
     "MY-CIT-05", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
-    "MY-CIT-06", "Dividend-paying firms (single-tier system)", "Osiris: dividends (not yet extracted)", "Low: one extra Osiris field", "Descriptive (coincides with MY-CIT-05)",
-    "MY-CIT-07", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
+    "MY-CIT-06", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate",
+    "MY-CIT-07", "Dividend-paying firms (single-tier system)", "Osiris: dividends (not yet extracted)", "Low: one extra Osiris field", "Descriptive (coincides with MY-CIT-05)",
     "MY-CIT-08", "All firms; bite depends on ETR", "Osiris: pre-period ETR", "Low", "Causal candidate (short post-period)",
     "MY-CIT-09", "Firms with chargeable income > RM100m (Cukai Makmur)", "Osiris: pre-tax earnings", "Low", "Infeasible (after last Osiris year)"
   )
