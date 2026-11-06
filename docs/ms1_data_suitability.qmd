@@ -243,7 +243,8 @@ etr$candidates |>
   tt() |>
   format_tt(j = 4, fn = \(x) pct(x)) |>
   format_tt(j = 5, digits = 3, num_fmt = "decimal")
-``` -->
+```
+-->
 
 
 ## Which tax changes can we study?
