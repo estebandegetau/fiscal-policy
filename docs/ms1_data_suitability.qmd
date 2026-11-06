@@ -273,8 +273,6 @@ feasibility |>
   style_tt(fontsize = 0.75)
 ```
 
-[I deleted the ID column from @tbl-feasibility. Check that it renders properly]{.aside}
-
 Three patterns stand out:
 
 1. **Timing rules out most incentive measures.** Five predate both datasets (1980–1996). Six take effect after the last census wave or Osiris year with investment data (2019–2023).
